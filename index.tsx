@@ -255,8 +255,12 @@ function SettingsView({
     setSaving(true)
     setErrorNotice(null)
     try {
-      saveConfig(draftConfig)
-      onSave(draftConfig)
+      const savedConfig = saveConfig(draftConfig)
+      // Keep the in-memory homepage state identical to the complete form
+      // payload. Storage is checked again only when the next view opens.
+      onSave(savedConfig)
+    } catch (error: any) {
+      setErrorNotice(error?.message || "保存失败，请确认 Scripting 本机 Storage 可用后重试。")
     } finally {
       setSaving(false)
     }
@@ -584,6 +588,13 @@ function ConsoleView() {
     }
   }, [config])
 
+  const openSettings = () => {
+    // Read the persisted value at the moment settings opens so a script
+    // restart or a widget/app lifecycle change cannot leave stale state here.
+    setConfig(loadConfig())
+    setShowSettings(true)
+  }
+
   useEffect(() => {
     if (isConfigReady(config)) loadData(config)
   }, [])
@@ -623,7 +634,7 @@ function ConsoleView() {
             >
               <Image systemName="arrow.clockwise" foregroundStyle="tintColor" />
             </Button>,
-            <Button key="aws-settings" action={() => setShowSettings(true)} accessibilityLabel="打开 AWS 设置">
+            <Button key="aws-settings" action={openSettings} accessibilityLabel="打开 AWS 设置">
               <Image systemName="gearshape" foregroundStyle="tintColor" />
             </Button>
           ]

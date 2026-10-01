@@ -7,7 +7,7 @@
  */
 import { Storage } from "scripting"
 
-export const APP_VERSION = "1.0.5"
+export const APP_VERSION = "1.0.6"
 
 export interface AwsAppConfig {
   accessKeyId: string
@@ -52,11 +52,17 @@ function normalizeConfig(value: unknown): AwsAppConfig {
 }
 
 export function loadConfig(): AwsAppConfig {
-  const keys = [STORAGE_KEY, ...LEGACY_STORAGE_KEYS]
-  for (const key of keys) {
-    const config = parseStoredConfig(readStorageValue(key))
-    if (config) return config
+  // Prefer the current key. Only fall back when it does not contain a
+  // complete saved credential set, so an empty/partial primary value cannot
+  // hide a valid configuration from an older build.
+  const primaryConfig = parseStoredConfig(readStorageValue(STORAGE_KEY))
+  if (primaryConfig) return primaryConfig
+
+  for (const key of LEGACY_STORAGE_KEYS) {
+    const legacyConfig = parseStoredConfig(readStorageValue(key))
+    if (legacyConfig) return legacyConfig
   }
+
   return normalizeConfig(DEFAULT_CONFIG)
 }
 
@@ -64,9 +70,23 @@ function parseStoredConfig(value: unknown): AwsAppConfig | null {
   if (!value) return null
   try {
     const parsed = typeof value === "string" ? JSON.parse(value) : value
-    // A partial config is valid: credentials and Region can be saved before
-    // the user chooses an EC2 Instance ID.
-    return parsed && typeof parsed === "object" ? normalizeConfig(parsed) : null
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null
+
+    // Instance ID is intentionally optional. Credentials and Region are the
+    // minimum persisted set, so an empty object cannot mask legacy data.
+    const source = parsed as Partial<AwsAppConfig>
+    if (
+      typeof source.accessKeyId !== "string" ||
+      !source.accessKeyId.trim() ||
+      typeof source.secretAccessKey !== "string" ||
+      !source.secretAccessKey.trim() ||
+      typeof source.region !== "string" ||
+      !source.region.trim()
+    ) {
+      return null
+    }
+
+    return normalizeConfig(parsed)
   } catch {
     return null
   }
@@ -83,14 +103,18 @@ function readStorageValue(key: string): unknown {
   }
 }
 
-/** 按 Scripting 原生同步方式保存配置，不读取返回值判定成功或失败。 */
-export function saveConfig(config: AwsAppConfig): void {
+/** 按 Scripting 原生同步方式保存配置，不读取 Storage.set 返回值。 */
+export function saveConfig(config: AwsAppConfig): AwsAppConfig {
+  const normalized = normalizeConfig(config)
   try {
-    if (typeof Storage !== "undefined" && Storage?.set) {
-      Storage.set(STORAGE_KEY, JSON.stringify(normalizeConfig(config)))
+    if (typeof Storage === "undefined" || typeof Storage.set !== "function") {
+      throw new Error("Scripting Storage.set 不可用")
     }
+    Storage.set(STORAGE_KEY, JSON.stringify(normalized))
+    return normalized
   } catch (error) {
     console.error("保存 AWS 配置失败:", error)
+    throw error instanceof Error ? error : new Error("保存 AWS 配置失败")
   }
 }
 
