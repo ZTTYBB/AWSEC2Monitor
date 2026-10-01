@@ -31,7 +31,7 @@ import {
   DEFAULT_CONFIG,
   SNAPSHOT_STORAGE_KEY,
   isConfigReady,
-  loadConfigAsync,
+  loadConfig,
   saveConfig
 } from "./aws_config"
 import { AwsMonitorData, AwsService } from "./aws"
@@ -227,16 +227,14 @@ function SettingsView({
       trafficThresholdGB: value
     }
     setSaving(true)
-    void (async () => {
-      const saved = await saveConfig(nextConfig)
-      if (!saved) {
-        setSaving(false)
-        setErrorNotice("配置写入本机 Storage 失败，请检查 Scripting 权限后重试；本次不会退出设置页。")
-        return
-      }
+    const saved = saveConfig(nextConfig)
+    if (!saved) {
+      setErrorNotice("配置写入本机 Storage 失败，请检查 Scripting 权限后重试；本次不会退出设置页。")
       setSaving(false)
-      onSave(nextConfig)
-    })()
+      return
+    }
+    setSaving(false)
+    onSave(nextConfig)
   }
 
   return (
@@ -488,9 +486,8 @@ function progressValue(data: AwsMonitorData | null, threshold: number): number {
 }
 
 function ConsoleView() {
-  const [config, setConfig] = useState<AwsAppConfig>(DEFAULT_CONFIG)
-  const [configLoaded, setConfigLoaded] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
+  const [config, setConfig] = useState<AwsAppConfig>(() => loadConfig())
+  const [showSettings, setShowSettings] = useState(() => !isConfigReady(config))
   const [data, setData] = useState<AwsMonitorData | null>(loadCachedData())
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -515,33 +512,8 @@ function ConsoleView() {
   }, [config])
 
   useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      const savedConfig = await loadConfigAsync()
-      if (cancelled) return
-      setConfig(savedConfig)
-      setConfigLoaded(true)
-      setShowSettings(!isConfigReady(savedConfig))
-      if (isConfigReady(savedConfig)) {
-        loadData(savedConfig)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
+    if (isConfigReady(config)) loadData(config)
   }, [])
-
-  if (!configLoaded) {
-    return (
-      <NavigationStack>
-        <VStack alignment="center" spacing={8} padding={24}>
-          <Image systemName="lock.shield" font={24} foregroundStyle="systemOrange" />
-          <Text font="headline" foregroundStyle="label">正在读取本机配置</Text>
-          <Text font="caption1" foregroundStyle="secondaryLabel">不会上传访问密钥。</Text>
-        </VStack>
-      </NavigationStack>
-    )
-  }
 
   if (showSettings) {
     return (

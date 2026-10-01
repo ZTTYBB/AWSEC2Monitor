@@ -7,7 +7,7 @@
  */
 import { Storage } from "scripting"
 
-export const APP_VERSION = "1.0.0"
+export const APP_VERSION = "1.0.1"
 
 export interface AwsAppConfig {
   accessKeyId: string
@@ -27,8 +27,10 @@ export const DEFAULT_CONFIG: AwsAppConfig = {
   trafficThresholdGB: 100
 }
 
-export const STORAGE_KEY = "aws_ec2_monitor_config"
-const LEGACY_STORAGE_KEYS = ["aws_ec2_monitor_config_v1"] as const
+// Keep the original key stable so upgrades do not create a new empty config
+// namespace in Scripting Storage.
+export const STORAGE_KEY = "aws_ec2_monitor_config_v1"
+const COMPAT_STORAGE_KEYS = ["aws_ec2_monitor_config"] as const
 export const SNAPSHOT_STORAGE_KEY = "aws_ec2_monitor_snapshot_v1"
 
 function normalizeConfig(value: unknown): AwsAppConfig {
@@ -49,7 +51,12 @@ function normalizeConfig(value: unknown): AwsAppConfig {
 }
 
 export function loadConfig(): AwsAppConfig {
-  return loadConfigSync()
+  const keys = [STORAGE_KEY, ...COMPAT_STORAGE_KEYS]
+  for (const key of keys) {
+    const config = parseStoredConfig(readStorageValue(key))
+    if (config) return config
+  }
+  return normalizeConfig(DEFAULT_CONFIG)
 }
 
 function parseStoredConfig(value: unknown): AwsAppConfig | null {
@@ -74,34 +81,6 @@ function readStorageValue(key: string): unknown {
   }
 }
 
-function loadConfigSync(): AwsAppConfig {
-  const keys = [STORAGE_KEY, ...LEGACY_STORAGE_KEYS]
-  for (const key of keys) {
-    const config = parseStoredConfig(readStorageValue(key))
-    if (config) return config
-  }
-  return normalizeConfig(DEFAULT_CONFIG)
-}
-
-/**
- * Supports both current Scripting Storage implementations and builds where
- * Storage methods return promises. Awaiting a plain value is harmless.
- */
-export async function loadConfigAsync(): Promise<AwsAppConfig> {
-  const keys = [STORAGE_KEY, ...LEGACY_STORAGE_KEYS]
-  for (const key of keys) {
-    try {
-      const storage = Storage as any
-      if (typeof storage === "undefined" || typeof storage.get !== "function") continue
-      const config = parseStoredConfig(await storage.get(key))
-      if (config) return config
-    } catch (error) {
-      console.error(`异步读取 AWS 配置失败 (${key}):`, error)
-    }
-  }
-  return normalizeConfig(DEFAULT_CONFIG)
-}
-
 function sameConfig(left: AwsAppConfig, right: AwsAppConfig): boolean {
   return (
     left.accessKeyId === right.accessKeyId &&
@@ -113,17 +92,17 @@ function sameConfig(left: AwsAppConfig, right: AwsAppConfig): boolean {
   )
 }
 
-export async function saveConfig(config: AwsAppConfig): Promise<boolean> {
+export function saveConfig(config: AwsAppConfig): boolean {
   const normalized = normalizeConfig(config)
   const payload = JSON.stringify(normalized)
   try {
     const storage = Storage as any
     if (typeof storage === "undefined" || typeof storage.set !== "function") return false
-    await storage.set(STORAGE_KEY, payload)
+    storage.set(STORAGE_KEY, payload)
 
-    // Keep the old key readable during package upgrades and verify the write.
-    await storage.set(LEGACY_STORAGE_KEYS[0], payload)
-    const saved = parseStoredConfig(await storage.get(STORAGE_KEY))
+    // Also write the temporary key used by the previous AWS build.
+    storage.set(COMPAT_STORAGE_KEYS[0], payload)
+    const saved = parseStoredConfig(storage.get(STORAGE_KEY))
     return Boolean(saved && sameConfig(saved, normalized))
   } catch (error) {
     console.error("保存 AWS 配置失败:", error)
