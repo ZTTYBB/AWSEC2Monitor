@@ -30,6 +30,9 @@ import {
   AwsAppConfig,
   DEFAULT_CONFIG,
   SNAPSHOT_STORAGE_KEY,
+  hasCredentials,
+  hasMonitorTarget,
+  hasRegion,
   isConfigReady,
   loadConfig,
   saveConfig
@@ -61,7 +64,7 @@ function formatUpdatedAt(value: Date | string | undefined): string {
 function humanizeAwsError(rawMessage: string): string {
   if (!rawMessage) return "AWS 请求失败"
   if (/AccessDenied|UnauthorizedOperation|not authorized/i.test(rawMessage)) {
-    return "AWS 权限不足：请确认 IAM 已允许 cloudwatch:GetMetricData 和 ec2:DescribeInstances。若使用临时凭据，还要填写完整 Session Token。"
+    return "AWS 查询权限不足：请确认 IAM 已允许 cloudwatch:GetMetricData 和 ec2:DescribeInstances。若使用临时凭据，还要填写完整 Session Token。"
   }
   if (/SignatureDoesNotMatch/i.test(rawMessage)) {
     return "AWS 签名校验失败：请检查 Access Key、Secret、Region，并确认手机日期与时间为自动设置。"
@@ -76,7 +79,7 @@ function humanizeAwsError(rawMessage: string): string {
     return "找不到 EC2 实例：请确认 Instance ID 和 Region 与 AWS 控制台一致。"
   }
   if (/\(403\)/.test(rawMessage)) {
-    return `AWS 返回 403：通常是 IAM 权限、凭据类型或签名问题。原始信息：${rawMessage}`
+    return `AWS 返回 403：通常是 IAM 查询权限、凭据类型或签名问题。原始信息：${rawMessage}`
   }
   return rawMessage
 }
@@ -233,15 +236,7 @@ function SettingsView({
   const handleSave = () => {
     if (saving) return
     const value = Number(threshold)
-    if (!accessKeyId.trim() || !secretAccessKey.trim() || !region.trim() || !instanceId.trim()) {
-      setErrorNotice("请填写 Access Key ID、Secret Access Key、Region 和 EC2 实例 ID。")
-      return
-    }
-    if (!Number.isFinite(value) || value <= 0) {
-      setErrorNotice("月流量阈值必须是大于 0 的数字。")
-      return
-    }
-    const nextConfig: AwsAppConfig = {
+    const draftConfig: AwsAppConfig = {
       accessKeyId: accessKeyId.trim(),
       secretAccessKey: secretAccessKey.trim(),
       sessionToken: sessionToken.trim(),
@@ -249,11 +244,19 @@ function SettingsView({
       instanceId: instanceId.trim(),
       trafficThresholdGB: value
     }
+    if (!hasCredentials(draftConfig) || !hasRegion(draftConfig)) {
+      setErrorNotice("请填写 Access Key ID、Secret Access Key 和 AWS Region。EC2 实例 ID 可以稍后补充。")
+      return
+    }
+    if (!Number.isFinite(value) || value <= 0) {
+      setErrorNotice("月流量阈值必须是大于 0 的数字。")
+      return
+    }
     setSaving(true)
     setErrorNotice(null)
     try {
-      saveConfig(nextConfig)
-      onSave(nextConfig)
+      saveConfig(draftConfig)
+      onSave(draftConfig)
     } finally {
       setSaving(false)
     }
@@ -278,8 +281,8 @@ function SettingsView({
         </Section>
       )}
       <Section
-        header={<Text>AWS 只读凭据</Text>}
-        footer={<Text font="footnote" foregroundStyle="secondaryLabel">凭据保存在 Scripting 本机 Storage。请只使用专用、最小权限 IAM 凭据，不要把凭据写进脚本。</Text>}
+        header={<Text>AWS 查询凭据</Text>}
+        footer={<Text font="footnote" foregroundStyle="secondaryLabel">凭据保存在 Scripting 本机 Storage。本脚本仅查询 AWS 状态和流量，不会修改任何 AWS 资源。</Text>}
       >
         <SettingsRow
           icon="key"
@@ -311,7 +314,7 @@ function SettingsView({
       </Section>
       <Section
         header={<Text>监控目标</Text>}
-        footer={<Text font="footnote" foregroundStyle="secondaryLabel">Region 必须与 EC2 实例一致；本脚本只读查询状态和 NetworkOut。</Text>}
+        footer={<Text font="footnote" foregroundStyle="secondaryLabel">Region 必须与 EC2 实例一致。Instance ID 可以先留空，补齐后主页才会开始查询。</Text>}
       >
         <SettingsRow
           icon="server.rack"
@@ -357,7 +360,7 @@ function SettingsView({
       <Section>
         <VStack alignment="center" spacing={3} padding={{ vertical: 14 }}>
           <Text font={12} foregroundStyle="secondaryLabel">AWS EC2 Traffic Monitor v{APP_VERSION}</Text>
-          <Text font={11} foregroundStyle="tertiaryLabel">CloudWatch NetworkOut · 只读</Text>
+          <Text font={11} foregroundStyle="tertiaryLabel">CloudWatch NetworkOut · 仅查询，不修改资源</Text>
         </VStack>
       </Section>
     </List>
@@ -505,7 +508,14 @@ function progressValue(data: AwsMonitorData | null, threshold: number): number {
   return data ? Math.min(1, Math.max(0, data.totalGB / threshold)) : 0
 }
 
-function UnconfiguredView({ onOpenSettings }: { onOpenSettings: () => void }) {
+function SetupPromptView({
+  config,
+  onOpenSettings
+}: {
+  config: AwsAppConfig
+  onOpenSettings: () => void
+}) {
+  const credentialsSaved = hasCredentials(config) && hasRegion(config)
   return (
     <VStack
       alignment="center"
@@ -524,14 +534,18 @@ function UnconfiguredView({ onOpenSettings }: { onOpenSettings: () => void }) {
         <Image systemName="gearshape.2.fill" font={25} foregroundStyle="systemOrange" />
       </ZStack>
       <VStack alignment="center" spacing={6}>
-        <Text font="title3" bold foregroundStyle="label">尚未配置 AWS</Text>
+        <Text font="title3" bold foregroundStyle="label">
+          {credentialsSaved ? "还需要设置监控目标" : "尚未配置 AWS 查询凭据"}
+        </Text>
         <Text
           font="subheadline"
           foregroundStyle="secondaryLabel"
           multilineTextAlignment="center"
           lineLimit={3}
         >
-          保存 Access Key、Region 和 EC2 实例 ID 后，主页会显示本月 NetworkOut 流量。
+          {credentialsSaved
+            ? `凭据已保存。请在设置中补充 EC2 实例 ID，主页才会查询 ${config.region} 的 NetworkOut。`
+            : "先保存 Access Key、Secret Access Key 和 Region。EC2 实例 ID 可以之后再设置。"}
         </Text>
       </VStack>
       <Button action={onOpenSettings} buttonStyle="borderedProminent" controlSize="large" accessibilityLabel="进入 AWS 设置">
@@ -553,7 +567,7 @@ function ConsoleView() {
 
   const loadData = useCallback(async (nextConfig: AwsAppConfig = config) => {
     if (!isConfigReady(nextConfig)) {
-      setErrorMessage("尚未配置 AWS 查询参数，请先进入设置。")
+      setErrorMessage(null)
       return
     }
     setLoading(true)
@@ -563,7 +577,7 @@ function ConsoleView() {
       setData(result)
       saveCachedData(result)
     } catch (error: any) {
-      const message = humanizeAwsError(error?.message || "AWS 请求失败，请检查 Region、实例 ID 和只读权限")
+      const message = humanizeAwsError(error?.message || "AWS 请求失败，请检查 Region、实例 ID 和 IAM 查询权限")
       setErrorMessage(message)
     } finally {
       setLoading(false)
@@ -616,8 +630,8 @@ function ConsoleView() {
         }}
       >
         <VStack alignment="leading" spacing={12} padding={{ horizontal: 16, top: 8, bottom: 36 }}>
-          {!isConfigReady(config) ? (
-            <UnconfiguredView onOpenSettings={() => setShowSettings(true)} />
+          {!hasCredentials(config) || !hasRegion(config) || !hasMonitorTarget(config) ? (
+            <SetupPromptView config={config} onOpenSettings={() => setShowSettings(true)} />
           ) : (
             <>
               {errorMessage && (
@@ -665,7 +679,7 @@ function ConsoleView() {
                   </VStack>
                   <VStack alignment="trailing" spacing={2}>
                     <Text font="subheadline" bold foregroundStyle={meta.color}>{meta.label}</Text>
-                    <Text font="caption2" foregroundStyle="secondaryLabel">只读查询</Text>
+                    <Text font="caption2" foregroundStyle="secondaryLabel">仅查询，不修改资源</Text>
                   </VStack>
                 </HStack>
                 <Divider padding={{ horizontal: 16 }} />

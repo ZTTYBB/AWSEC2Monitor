@@ -15,7 +15,7 @@
 
 👉 **[⚡ 点击一键导入到 Scripting (国内 CDN 加速)](https://scripting.fun/import_scripts?urls=%5B%22https%3A%2F%2Ffastly.jsdelivr.net%2Fgh%2FZTTYBB%2FAWSEC2Monitor%40main%2FAWSEC2.scripting%22%5D)**
 
-> 当前发布包为 `1.0.4`。`AWSEC2.scripting` 包内使用 Scripting 约定的 `index.tsx` 与 `widget.tsx` 入口文件；不要在安装包内改成 `aws_index.tsx` 或 `aws_widget.tsx`。
+> 当前发布包为 `1.0.5`。`AWSEC2.scripting` 包内使用 Scripting 约定的 `index.tsx` 与 `widget.tsx` 入口文件；不要在安装包内改成 `aws_index.tsx` 或 `aws_widget.tsx`。
 
 ---
 
@@ -29,7 +29,7 @@
 
 ## ⚙️ 手机端配置
 
-首次打开脚本或添加小组件时，填写以下配置：
+每次打开脚本都会先进入主页。进入设置后，填写以下配置：
 1. **AWS Access Key ID**
 2. **AWS Secret Access Key**
 3. **Session Token**（临时凭据填写；长期密钥留空）
@@ -37,7 +37,7 @@
 5. **Instance ID**：EC2 实例 ID（例如 `i-0363cc4c1957d01ea`）
 6. **月度 NetworkOut 阈值**：默认 `100 GB`（或按需设为 `95 GB`）
 
-凭据保存在 Scripting 本机 Storage，绝不上云。脚本启动时会同步读取已保存配置；保存时按 Scripting 原生方式写入后立即返回监控页。旧版本的 `aws_ec2_monitor_config_v1` 配置也会自动兼容读取。
+Access Key、Secret 和 Region 保存后即可返回主页，Instance ID 可以稍后补充。凭据保存在 Scripting 本机 Storage，绝不上云。脚本启动时会同步读取已保存配置；只有凭据、Region 和 Instance ID 都存在时才查询 CloudWatch。保存时按 Scripting 原生同步方式写入后立即返回主页。旧版本的 `aws_ec2_monitor_config` 配置也会自动兼容读取。
 
 ---
 
@@ -60,4 +60,4 @@
 }
 ```
 
-脚本只只读读取 CloudWatch 和 EC2 状态，不会修改任何 AWS 资源。
+脚本仅查询 CloudWatch 和 EC2 状态，不会修改任何 AWS 资源。

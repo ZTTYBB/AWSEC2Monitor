@@ -6,11 +6,11 @@
   },
   "icon": "cloud.fill",
   "color": "rgba(255, 149, 0, 1.00)",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "runInApp": true,
   "description": "Read-only AWS EC2 monthly NetworkOut monitor using CloudWatch. It does not start, stop, reboot, or change any AWS resource.",
   "localizedDescriptions": {
-    "zh": "只读读取 AWS EC2 的 CloudWatch NetworkOut 月度用量；不启动、停止、重启或修改任何 AWS 资源。",
+    "zh": "仅查询 AWS EC2 的 CloudWatch NetworkOut 月度用量；不启动、停止、重启或修改任何 AWS 资源。",
     "en": "Read-only AWS EC2 monthly NetworkOut monitor using CloudWatch. It does not start, stop, reboot, or change any AWS resource."
   }
 }

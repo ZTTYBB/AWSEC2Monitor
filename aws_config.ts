@@ -7,7 +7,7 @@
  */
 import { Storage } from "scripting"
 
-export const APP_VERSION = "1.0.4"
+export const APP_VERSION = "1.0.5"
 
 export interface AwsAppConfig {
   accessKeyId: string
@@ -28,7 +28,8 @@ export const DEFAULT_CONFIG: AwsAppConfig = {
 }
 
 // Keep the original key stable so upgrades do not create a new Scripting
-// Storage namespace. The unversioned key is read-only compatibility data.
+// Storage namespace. The unversioned key is compatibility data and is read
+// only.
 export const STORAGE_KEY = "aws_ec2_monitor_config_v1"
 const LEGACY_STORAGE_KEYS = ["aws_ec2_monitor_config"] as const
 export const SNAPSHOT_STORAGE_KEY = "aws_ec2_monitor_snapshot_v1"
@@ -63,8 +64,9 @@ function parseStoredConfig(value: unknown): AwsAppConfig | null {
   if (!value) return null
   try {
     const parsed = typeof value === "string" ? JSON.parse(value) : value
-    const config = normalizeConfig(parsed)
-    return isConfigReady(config) ? config : null
+    // A partial config is valid: credentials and Region can be saved before
+    // the user chooses an EC2 Instance ID.
+    return parsed && typeof parsed === "object" ? normalizeConfig(parsed) : null
   } catch {
     return null
   }
@@ -92,11 +94,18 @@ export function saveConfig(config: AwsAppConfig): void {
   }
 }
 
+export function hasCredentials(config: AwsAppConfig): boolean {
+  return Boolean(config.accessKeyId.trim() && config.secretAccessKey.trim())
+}
+
+export function hasRegion(config: AwsAppConfig): boolean {
+  return Boolean(config.region.trim())
+}
+
+export function hasMonitorTarget(config: AwsAppConfig): boolean {
+  return Boolean(config.instanceId.trim())
+}
+
 export function isConfigReady(config: AwsAppConfig): boolean {
-  return Boolean(
-    config.accessKeyId.trim() &&
-    config.secretAccessKey.trim() &&
-    config.region.trim() &&
-    config.instanceId.trim()
-  )
+  return hasCredentials(config) && hasRegion(config) && hasMonitorTarget(config)
 }

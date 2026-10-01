@@ -73,7 +73,7 @@ function NotConfiguredView() {
         <Image systemName="cloud.fill" font={14} foregroundStyle="systemOrange" />
         <Text font="headline" bold>AWS EC2</Text>
       </HStack>
-      <Text font="caption1" foregroundStyle="secondaryLabel" lineLimit={3}>请先在 Scripting App 内完成 AWS 只读配置。</Text>
+      <Text font="caption1" foregroundStyle="secondaryLabel" lineLimit={3}>请在 Scripting App 内配置 AWS 查询凭据和监控目标。</Text>
     </VStack>
   )
 }
@@ -254,7 +254,7 @@ async function main() {
           <Image systemName="exclamationmark.triangle.fill" font={12} foregroundStyle="systemRed" />
           <Text font="headline" bold foregroundStyle="systemRed">AWS 获取失败</Text>
         </HStack>
-        <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={3}>请打开 App 检查配置、Region 和 IAM 只读权限。</Text>
+        <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={3}>请打开 App 检查配置、Region 和 IAM 查询权限。</Text>
       </VStack>
     )
   }
