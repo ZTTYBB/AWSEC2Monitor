@@ -7,7 +7,7 @@
  */
 import { Storage } from "scripting"
 
-export const APP_VERSION = "1.0.1"
+export const APP_VERSION = "1.0.2"
 
 export interface AwsAppConfig {
   accessKeyId: string
@@ -81,32 +81,21 @@ function readStorageValue(key: string): unknown {
   }
 }
 
-function sameConfig(left: AwsAppConfig, right: AwsAppConfig): boolean {
-  return (
-    left.accessKeyId === right.accessKeyId &&
-    left.secretAccessKey === right.secretAccessKey &&
-    left.sessionToken === right.sessionToken &&
-    left.region === right.region &&
-    left.instanceId === right.instanceId &&
-    left.trafficThresholdGB === right.trafficThresholdGB
-  )
-}
-
-export function saveConfig(config: AwsAppConfig): boolean {
-  const normalized = normalizeConfig(config)
-  const payload = JSON.stringify(normalized)
+/**
+ * Match AliyunCDTMonitor: Storage.set is synchronous in Scripting.
+ * Do not read the key back immediately; some Scripting builds expose delayed
+ * persistence and an immediate read can falsely look like a permission error.
+ */
+export function saveConfig(config: AwsAppConfig): void {
   try {
-    const storage = Storage as any
-    if (typeof storage === "undefined" || typeof storage.set !== "function") return false
-    storage.set(STORAGE_KEY, payload)
-
-    // Also write the temporary key used by the previous AWS build.
-    storage.set(COMPAT_STORAGE_KEYS[0], payload)
-    const saved = parseStoredConfig(storage.get(STORAGE_KEY))
-    return Boolean(saved && sameConfig(saved, normalized))
+    if (typeof Storage !== "undefined" && Storage?.set) {
+      const payload = JSON.stringify(normalizeConfig(config))
+      Storage.set(STORAGE_KEY, payload)
+      // Keep configurations saved by the interim package readable.
+      Storage.set(COMPAT_STORAGE_KEYS[0], payload)
+    }
   } catch (error) {
     console.error("保存 AWS 配置失败:", error)
-    return false
   }
 }
 

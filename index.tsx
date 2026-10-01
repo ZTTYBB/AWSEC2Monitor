@@ -58,6 +58,29 @@ function formatUpdatedAt(value: Date | string | undefined): string {
   return Number.isNaN(date.getTime()) ? "时间未知" : date.toLocaleString()
 }
 
+function humanizeAwsError(rawMessage: string): string {
+  if (!rawMessage) return "AWS 请求失败"
+  if (/AccessDenied|UnauthorizedOperation|not authorized/i.test(rawMessage)) {
+    return "AWS 权限不足：请确认 IAM 已允许 cloudwatch:GetMetricData 和 ec2:DescribeInstances。若使用临时凭据，还要填写完整 Session Token。"
+  }
+  if (/SignatureDoesNotMatch/i.test(rawMessage)) {
+    return "AWS 签名校验失败：请检查 Access Key、Secret、Region，并确认手机日期与时间为自动设置。"
+  }
+  if (/InvalidClientTokenId|UnrecognizedClientException|InvalidAccessKeyId/i.test(rawMessage)) {
+    return "AWS 凭据无效或已失效：请检查 Access Key、Secret；临时凭据还必须填写 Session Token。"
+  }
+  if (/RequestExpired|RequestTimeTooSkewed/i.test(rawMessage)) {
+    return "AWS 请求时间偏差过大：请将 iPhone 的日期与时间设为自动。"
+  }
+  if (/InvalidInstanceID\.NotFound|实例/i.test(rawMessage)) {
+    return "找不到 EC2 实例：请确认 Instance ID 和 Region 与 AWS 控制台一致。"
+  }
+  if (/\(403\)/.test(rawMessage)) {
+    return `AWS 返回 403：通常是 IAM 权限、凭据类型或签名问题。原始信息：${rawMessage}`
+  }
+  return rawMessage
+}
+
 function statusMeta(status: string): { label: string; color: string; icon: string } {
   switch (status) {
     case "running":
@@ -227,12 +250,7 @@ function SettingsView({
       trafficThresholdGB: value
     }
     setSaving(true)
-    const saved = saveConfig(nextConfig)
-    if (!saved) {
-      setErrorNotice("配置写入本机 Storage 失败，请检查 Scripting 权限后重试；本次不会退出设置页。")
-      setSaving(false)
-      return
-    }
+    saveConfig(nextConfig)
     setSaving(false)
     onSave(nextConfig)
   }
@@ -504,7 +522,7 @@ function ConsoleView() {
       setData(result)
       saveCachedData(result)
     } catch (error: any) {
-      const message = error?.message || "AWS 请求失败，请检查 Region、实例 ID 和只读权限"
+      const message = humanizeAwsError(error?.message || "AWS 请求失败，请检查 Region、实例 ID 和只读权限")
       setErrorMessage(message)
     } finally {
       setLoading(false)

@@ -6,7 +6,7 @@
   },
   "icon": "cloud.fill",
   "color": "rgba(255, 149, 0, 1.00)",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "runInApp": true,
   "description": "Read-only AWS EC2 monthly NetworkOut monitor using CloudWatch. It does not start, stop, reboot, or change any AWS resource.",
   "localizedDescriptions": {
