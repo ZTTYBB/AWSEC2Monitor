@@ -7,7 +7,7 @@
  */
 import { Storage } from "scripting"
 
-export const APP_VERSION = "1.0.2"
+export const APP_VERSION = "1.0.3"
 
 export interface AwsAppConfig {
   accessKeyId: string

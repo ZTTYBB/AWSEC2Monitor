@@ -269,9 +269,7 @@ function SettingsView({
       navigationTitle="AWS 参数配置"
       navigationBarTitleDisplayMode="inline"
       toolbar={{
-        topBarLeading: isConfigReady(currentConfig)
-          ? [<Button key="aws-settings-back" action={onCancel} disabled={saving} accessibilityLabel="返回"><Image systemName="chevron.backward" /></Button>]
-          : undefined,
+        topBarLeading: [<Button key="aws-settings-back" action={onCancel} disabled={saving} accessibilityLabel="返回主页"><Image systemName="chevron.backward" /></Button>],
         topBarTrailing: [<Button key="aws-settings-save" action={handleSave} disabled={saving} accessibilityLabel="保存配置"><Image systemName="checkmark" /></Button>]
       }}
     >
@@ -511,6 +509,45 @@ function progressValue(data: AwsMonitorData | null, threshold: number): number {
   return data ? Math.min(1, Math.max(0, data.totalGB / threshold)) : 0
 }
 
+function UnconfiguredView({ onOpenSettings }: { onOpenSettings: () => void }) {
+  return (
+    <VStack
+      alignment="center"
+      spacing={16}
+      padding={{ horizontal: 24, vertical: 42 }}
+      frame={{ maxWidth: Infinity, alignment: "center" }}
+      background="systemBackground"
+      border={{ style: "separator", width: 0.5 }}
+      clipShape={{ type: "rect", cornerRadius: 18, style: "continuous" }}
+    >
+      <ZStack
+        frame={{ width: 58, height: 58 }}
+        background="tertiarySystemFill"
+        clipShape={{ type: "rect", cornerRadius: 16, style: "continuous" }}
+      >
+        <Image systemName="gearshape.2.fill" font={25} foregroundStyle="systemOrange" />
+      </ZStack>
+      <VStack alignment="center" spacing={6}>
+        <Text font="title3" bold foregroundStyle="label">尚未配置 AWS</Text>
+        <Text
+          font="subheadline"
+          foregroundStyle="secondaryLabel"
+          multilineTextAlignment="center"
+          lineLimit={3}
+        >
+          保存 Access Key、Region 和 EC2 实例 ID 后，主页会显示本月 NetworkOut 流量。
+        </Text>
+      </VStack>
+      <Button action={onOpenSettings} buttonStyle="borderedProminent" controlSize="large" accessibilityLabel="进入 AWS 设置">
+        <HStack spacing={7} alignment="center">
+          <Image systemName="gearshape" />
+          <Text font="headline">进入设置</Text>
+        </HStack>
+      </Button>
+    </VStack>
+  )
+}
+
 function ConsoleView() {
   const [config, setConfig] = useState<AwsAppConfig>(DEFAULT_CONFIG)
   const [storageReady, setStorageReady] = useState(false)
@@ -521,7 +558,7 @@ function ConsoleView() {
 
   const loadData = useCallback(async (nextConfig: AwsAppConfig = config) => {
     if (!isConfigReady(nextConfig)) {
-      setShowSettings(true)
+      setErrorMessage("尚未配置 AWS 查询参数，请先进入设置。")
       return
     }
     setLoading(true)
@@ -541,7 +578,7 @@ function ConsoleView() {
   useEffect(() => {
     loadConfigAsync().then(nextConfig => {
       setConfig(nextConfig)
-      setShowSettings(!isConfigReady(nextConfig))
+      setShowSettings(false)
       setStorageReady(true)
       if (isConfigReady(nextConfig)) loadData(nextConfig)
     })
@@ -608,70 +645,76 @@ function ConsoleView() {
         }}
       >
         <VStack alignment="leading" spacing={12} padding={{ horizontal: 16, top: 8, bottom: 36 }}>
-          {errorMessage && (
-            <HStack
-              alignment="top"
-              spacing={8}
-              padding={{ horizontal: 14, vertical: 12 }}
-              background="secondarySystemBackground"
-              border={{ style: "separator", width: 0.5 }}
-              clipShape={{ type: "rect", cornerRadius: 14, style: "continuous" }}
-            >
-              <Image systemName="exclamationmark.triangle.fill" font={13} foregroundStyle="systemRed" />
-              <Text font="caption1" foregroundStyle="systemRed" lineLimit={4} frame={{ maxWidth: Infinity, alignment: "leading" }}>{errorMessage}</Text>
-            </HStack>
-          )}
+          {!isConfigReady(config) ? (
+            <UnconfiguredView onOpenSettings={() => setShowSettings(true)} />
+          ) : (
+            <>
+              {errorMessage && (
+                <HStack
+                  alignment="top"
+                  spacing={8}
+                  padding={{ horizontal: 14, vertical: 12 }}
+                  background="secondarySystemBackground"
+                  border={{ style: "separator", width: 0.5 }}
+                  clipShape={{ type: "rect", cornerRadius: 14, style: "continuous" }}
+                >
+                  <Image systemName="exclamationmark.triangle.fill" font={13} foregroundStyle="systemRed" />
+                  <Text font="caption1" foregroundStyle="systemRed" lineLimit={4} frame={{ maxWidth: Infinity, alignment: "leading" }}>{errorMessage}</Text>
+                </HStack>
+              )}
 
-          <TrafficOverview data={data} threshold={threshold} loading={loading} />
+              <TrafficOverview data={data} threshold={threshold} loading={loading} />
 
-          <HStack alignment="center" padding={{ horizontal: 4 }}>
-            <Image systemName="clock" font={12} foregroundStyle="secondaryLabel" />
-            <Text font="caption2" foregroundStyle="secondaryLabel">最后更新：{formatUpdatedAt(data?.updatedAt)}</Text>
-            <Spacer />
-            <Text font="caption2" foregroundStyle="secondaryLabel">阈值 {threshold} GB</Text>
-          </HStack>
+              <HStack alignment="center" padding={{ horizontal: 4 }}>
+                <Image systemName="clock" font={12} foregroundStyle="secondaryLabel" />
+                <Text font="caption2" foregroundStyle="secondaryLabel">最后更新：{formatUpdatedAt(data?.updatedAt)}</Text>
+                <Spacer />
+                <Text font="caption2" foregroundStyle="secondaryLabel">阈值 {threshold} GB</Text>
+              </HStack>
 
-          <VStack
-            spacing={0}
-            background="systemBackground"
-            border={{ style: "separator", width: 0.5 }}
-            clipShape={{ type: "rect", cornerRadius: 16, style: "continuous" }}
-          >
-            <HStack padding={{ horizontal: 16, vertical: 14 }} alignment="center" spacing={12}>
-              <ZStack
-                frame={{ width: 36, height: 36 }}
-                background="tertiarySystemFill"
-                clipShape={{ type: "rect", cornerRadius: 10, style: "continuous" }}
+              <VStack
+                spacing={0}
+                background="systemBackground"
+                border={{ style: "separator", width: 0.5 }}
+                clipShape={{ type: "rect", cornerRadius: 16, style: "continuous" }}
               >
-                <Image systemName="server.rack" font={16} foregroundStyle={meta.color} />
-              </ZStack>
-              <VStack alignment="leading" spacing={3} frame={{ maxWidth: Infinity, alignment: "leading" }}>
-                <Text font="subheadline" bold foregroundStyle="label">EC2 实例状态</Text>
-                <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
-                  {data?.instance?.instanceId || config.instanceId} · {config.region}
-                </Text>
+                <HStack padding={{ horizontal: 16, vertical: 14 }} alignment="center" spacing={12}>
+                  <ZStack
+                    frame={{ width: 36, height: 36 }}
+                    background="tertiarySystemFill"
+                    clipShape={{ type: "rect", cornerRadius: 10, style: "continuous" }}
+                  >
+                    <Image systemName="server.rack" font={16} foregroundStyle={meta.color} />
+                  </ZStack>
+                  <VStack alignment="leading" spacing={3} frame={{ maxWidth: Infinity, alignment: "leading" }}>
+                    <Text font="subheadline" bold foregroundStyle="label">EC2 实例状态</Text>
+                    <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
+                      {data?.instance?.instanceId || config.instanceId} · {config.region}
+                    </Text>
+                  </VStack>
+                  <VStack alignment="trailing" spacing={2}>
+                    <Text font="subheadline" bold foregroundStyle={meta.color}>{meta.label}</Text>
+                    <Text font="caption2" foregroundStyle="secondaryLabel">只读查询</Text>
+                  </VStack>
+                </HStack>
+                <Divider padding={{ horizontal: 16 }} />
+                <HStack padding={{ horizontal: 16, vertical: 13 }} alignment="center" spacing={12}>
+                  <Image systemName="waveform.path.ecg" font={16} foregroundStyle="systemTeal" frame={{ width: 36, height: 28 }} />
+                  <VStack alignment="leading" spacing={3} frame={{ maxWidth: Infinity, alignment: "leading" }}>
+                    <Text font="subheadline" foregroundStyle="label">统计口径</Text>
+                    <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={2}>
+                      CloudWatch · Sum · 300 秒 · UTC 自然月
+                    </Text>
+                  </VStack>
+                  <Text font="caption2" foregroundStyle="secondaryLabel">NetworkOut</Text>
+                </HStack>
               </VStack>
-              <VStack alignment="trailing" spacing={2}>
-                <Text font="subheadline" bold foregroundStyle={meta.color}>{meta.label}</Text>
-                <Text font="caption2" foregroundStyle="secondaryLabel">只读查询</Text>
-              </VStack>
-            </HStack>
-            <Divider padding={{ horizontal: 16 }} />
-            <HStack padding={{ horizontal: 16, vertical: 13 }} alignment="center" spacing={12}>
-              <Image systemName="waveform.path.ecg" font={16} foregroundStyle="systemTeal" frame={{ width: 36, height: 28 }} />
-              <VStack alignment="leading" spacing={3} frame={{ maxWidth: Infinity, alignment: "leading" }}>
-                <Text font="subheadline" foregroundStyle="label">统计口径</Text>
-                <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={2}>
-                  CloudWatch · Sum · 300 秒 · UTC 自然月
-                </Text>
-              </VStack>
-              <Text font="caption2" foregroundStyle="secondaryLabel">NetworkOut</Text>
-            </HStack>
-          </VStack>
 
-          <Text font="caption2" foregroundStyle="tertiaryLabel" padding={{ horizontal: 4, top: 2 }}>
-            这里显示的是当前 EC2 实例的 NetworkOut，不等于 AWS 账号所有服务的账单出站总量；CloudWatch 数据可能有延迟。
-          </Text>
+              <Text font="caption2" foregroundStyle="tertiaryLabel" padding={{ horizontal: 4, top: 2 }}>
+                这里显示的是当前 EC2 实例的 NetworkOut，不等于 AWS 账号所有服务的账单出站总量；CloudWatch 数据可能有延迟。
+              </Text>
+            </>
+          )}
         </VStack>
       </ScrollView>
     </NavigationStack>
