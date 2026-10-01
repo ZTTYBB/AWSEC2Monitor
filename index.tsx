@@ -181,9 +181,8 @@ function SettingsGroup({
         alignment="leading"
         spacing={0}
         frame={{ maxWidth: Infinity, alignment: "leading" }}
-        glassEffect={true}
+        background="secondarySystemBackground"
         clipShape={{ type: "rect", cornerRadius: 16, style: "continuous" }}
-        shadow={{ color: "rgba(0, 0, 0, 0.08)", radius: 12, y: 4 }}
       >
         {children}
       </VStack>
@@ -399,13 +398,6 @@ function SettingsView({
           />
         </SettingsGroup>
 
-        <Button action={handleSave} buttonStyle="borderedProminent" controlSize="large" disabled={saving} accessibilityLabel="保存配置并返回">
-          <HStack spacing={8} alignment="center">
-            <Image systemName={saving ? "arrow.clockwise" : "checkmark.circle.fill"} />
-            <Text font="headline">{saving ? "正在保存" : "保存并返回主页"}</Text>
-          </HStack>
-        </Button>
-
         <VStack alignment="center" spacing={3} padding={{ top: 4, bottom: 8 }}>
           <Text font="caption2" foregroundStyle="secondaryLabel">AWS EC2 Traffic Monitor · v{APP_VERSION}</Text>
           <Text font="caption2" foregroundStyle="tertiaryLabel">CloudWatch NetworkOut · 只读查询</Text>
@@ -545,9 +537,8 @@ function TrafficOverview({
       spacing={18}
       padding={18}
       frame={{ maxWidth: Infinity, alignment: "leading" }}
-      glassEffect={true}
+      background="secondarySystemBackground"
       clipShape={{ type: "rect", cornerRadius: 24, style: "continuous" }}
-      shadow={{ color: "rgba(0, 0, 0, 0.10)", radius: 16, y: 6 }}
     >
       <HStack alignment="center">
         <HStack spacing={10} alignment="center">
@@ -622,9 +613,8 @@ function SetupPromptView({
       spacing={18}
       padding={{ horizontal: 22, vertical: 30 }}
       frame={{ maxWidth: Infinity, alignment: "center" }}
-      glassEffect={true}
+      background="secondarySystemBackground"
       clipShape={{ type: "rect", cornerRadius: 24, style: "continuous" }}
-      shadow={{ color: "rgba(0, 0, 0, 0.10)", radius: 16, y: 6 }}
     >
       <ZStack
         frame={{ width: 66, height: 66 }}
@@ -768,7 +758,6 @@ function ConsoleView() {
                   spacing={8}
                   padding={{ horizontal: 14, vertical: 12 }}
                   background="rgba(255, 59, 48, 0.10)"
-                  glassEffect={true}
                   clipShape={{ type: "rect", cornerRadius: 14, style: "continuous" }}
                 >
                   <Image systemName="exclamationmark.triangle.fill" font={13} foregroundStyle="systemRed" />
@@ -790,9 +779,8 @@ function ConsoleView() {
               <VStack
                 alignment="leading"
                 spacing={0}
-                glassEffect={true}
+                background="secondarySystemBackground"
                 clipShape={{ type: "rect", cornerRadius: 18, style: "continuous" }}
-                shadow={{ color: "rgba(0, 0, 0, 0.08)", radius: 12, y: 4 }}
               >
                 <HStack padding={{ horizontal: 15, vertical: 14 }} alignment="center" spacing={12}>
                   <ZStack
