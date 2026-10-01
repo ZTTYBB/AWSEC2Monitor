@@ -31,7 +31,7 @@ import {
   DEFAULT_CONFIG,
   SNAPSHOT_STORAGE_KEY,
   isConfigReady,
-  loadConfig,
+  loadConfigAsync,
   saveConfig
 } from "./aws_config"
 import { AwsMonitorData, AwsService } from "./aws"
@@ -176,7 +176,7 @@ function SettingsView({
   onCancel
 }: {
   currentConfig: AwsAppConfig
-  onSave: (config: AwsAppConfig) => void
+  onSave: (config: AwsAppConfig) => void | Promise<void>
   onCancel: () => void
 }) {
   const [accessKeyId, setAccessKeyId] = useState(currentConfig.accessKeyId)
@@ -230,7 +230,7 @@ function SettingsView({
     }
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (saving) return
     const value = Number(threshold)
     if (!accessKeyId.trim() || !secretAccessKey.trim() || !region.trim() || !instanceId.trim()) {
@@ -250,9 +250,17 @@ function SettingsView({
       trafficThresholdGB: value
     }
     setSaving(true)
-    saveConfig(nextConfig)
-    setSaving(false)
-    onSave(nextConfig)
+    setErrorNotice(null)
+    try {
+      const saved = await saveConfig(nextConfig)
+      if (!saved) {
+        setErrorNotice("本机 Storage 不可用，配置没有保存。请检查 Scripting 权限后重试。")
+        return
+      }
+      await onSave(nextConfig)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -504,8 +512,9 @@ function progressValue(data: AwsMonitorData | null, threshold: number): number {
 }
 
 function ConsoleView() {
-  const [config, setConfig] = useState<AwsAppConfig>(() => loadConfig())
-  const [showSettings, setShowSettings] = useState(() => !isConfigReady(config))
+  const [config, setConfig] = useState<AwsAppConfig>(DEFAULT_CONFIG)
+  const [storageReady, setStorageReady] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [data, setData] = useState<AwsMonitorData | null>(loadCachedData())
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -530,8 +539,32 @@ function ConsoleView() {
   }, [config])
 
   useEffect(() => {
-    if (isConfigReady(config)) loadData(config)
+    loadConfigAsync().then(nextConfig => {
+      setConfig(nextConfig)
+      setShowSettings(!isConfigReady(nextConfig))
+      setStorageReady(true)
+      if (isConfigReady(nextConfig)) loadData(nextConfig)
+    })
   }, [])
+
+  if (!storageReady) {
+    return (
+      <NavigationStack>
+        <List
+          background="systemGroupedBackground"
+          navigationTitle="AWS EC2 监控"
+          navigationBarTitleDisplayMode="inline"
+        >
+          <Section>
+            <HStack alignment="center" spacing={10} padding={{ vertical: 12 }}>
+              <Image systemName="arrow.clockwise" foregroundStyle="tintColor" />
+              <Text font="body" foregroundStyle="secondaryLabel">正在读取本机配置...</Text>
+            </HStack>
+          </Section>
+        </List>
+      </NavigationStack>
+    )
+  }
 
   if (showSettings) {
     return (

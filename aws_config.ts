@@ -27,10 +27,10 @@ export const DEFAULT_CONFIG: AwsAppConfig = {
   trafficThresholdGB: 100
 }
 
-// Keep the original key stable so upgrades do not create a new empty config
-// namespace in Scripting Storage.
+// Keep the original key stable so upgrades do not create a new Scripting
+// Storage namespace. The unversioned key is read-only compatibility data.
 export const STORAGE_KEY = "aws_ec2_monitor_config_v1"
-const COMPAT_STORAGE_KEYS = ["aws_ec2_monitor_config"] as const
+const LEGACY_STORAGE_KEYS = ["aws_ec2_monitor_config"] as const
 export const SNAPSHOT_STORAGE_KEY = "aws_ec2_monitor_snapshot_v1"
 
 function normalizeConfig(value: unknown): AwsAppConfig {
@@ -51,10 +51,29 @@ function normalizeConfig(value: unknown): AwsAppConfig {
 }
 
 export function loadConfig(): AwsAppConfig {
-  const keys = [STORAGE_KEY, ...COMPAT_STORAGE_KEYS]
+  const keys = [STORAGE_KEY, ...LEGACY_STORAGE_KEYS]
   for (const key of keys) {
     const config = parseStoredConfig(readStorageValue(key))
     if (config) return config
+  }
+  return normalizeConfig(DEFAULT_CONFIG)
+}
+
+/**
+ * Storage is synchronous in the Aliyun-compatible Scripting builds, but
+ * awaiting the result also supports builds that expose Promise-like methods.
+ */
+export async function loadConfigAsync(): Promise<AwsAppConfig> {
+  const keys = [STORAGE_KEY, ...LEGACY_STORAGE_KEYS]
+  for (const key of keys) {
+    try {
+      const storage = Storage as any
+      if (typeof storage === "undefined" || typeof storage.get !== "function") continue
+      const config = parseStoredConfig(await storage.get(key))
+      if (config) return config
+    } catch (error) {
+      console.error(`异步读取 AWS 配置失败 (${key}):`, error)
+    }
   }
   return normalizeConfig(DEFAULT_CONFIG)
 }
@@ -82,20 +101,21 @@ function readStorageValue(key: string): unknown {
 }
 
 /**
- * Match AliyunCDTMonitor: Storage.set is synchronous in Scripting.
- * Do not read the key back immediately; some Scripting builds expose delayed
- * persistence and an immediate read can falsely look like a permission error.
+ * Wait for both synchronous and Promise-returning Storage implementations.
+ * Do not read the key back here: some builds commit Storage asynchronously.
  */
-export function saveConfig(config: AwsAppConfig): void {
+export async function saveConfig(config: AwsAppConfig): Promise<boolean> {
+  const payload = JSON.stringify(normalizeConfig(config))
   try {
-    if (typeof Storage !== "undefined" && Storage?.set) {
-      const payload = JSON.stringify(normalizeConfig(config))
-      Storage.set(STORAGE_KEY, payload)
-      // Keep configurations saved by the interim package readable.
-      Storage.set(COMPAT_STORAGE_KEYS[0], payload)
-    }
+    const storage = Storage as any
+    if (typeof storage === "undefined" || typeof storage.set !== "function") return false
+    // Aliyun's Scripting Storage.set is synchronous; await also handles
+    // builds that return a Promise without changing the sync behavior.
+    await storage.set(STORAGE_KEY, payload)
+    return true
   } catch (error) {
     console.error("保存 AWS 配置失败:", error)
+    return false
   }
 }
 
