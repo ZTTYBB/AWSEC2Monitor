@@ -7,7 +7,7 @@
  */
 import { Storage } from "scripting"
 
-export const APP_VERSION = "1.0.3"
+export const APP_VERSION = "1.0.4"
 
 export interface AwsAppConfig {
   accessKeyId: string
@@ -59,25 +59,6 @@ export function loadConfig(): AwsAppConfig {
   return normalizeConfig(DEFAULT_CONFIG)
 }
 
-/**
- * Storage is synchronous in the Aliyun-compatible Scripting builds, but
- * awaiting the result also supports builds that expose Promise-like methods.
- */
-export async function loadConfigAsync(): Promise<AwsAppConfig> {
-  const keys = [STORAGE_KEY, ...LEGACY_STORAGE_KEYS]
-  for (const key of keys) {
-    try {
-      const storage = Storage as any
-      if (typeof storage === "undefined" || typeof storage.get !== "function") continue
-      const config = parseStoredConfig(await storage.get(key))
-      if (config) return config
-    } catch (error) {
-      console.error(`异步读取 AWS 配置失败 (${key}):`, error)
-    }
-  }
-  return normalizeConfig(DEFAULT_CONFIG)
-}
-
 function parseStoredConfig(value: unknown): AwsAppConfig | null {
   if (!value) return null
   try {
@@ -100,22 +81,14 @@ function readStorageValue(key: string): unknown {
   }
 }
 
-/**
- * Wait for both synchronous and Promise-returning Storage implementations.
- * Do not read the key back here: some builds commit Storage asynchronously.
- */
-export async function saveConfig(config: AwsAppConfig): Promise<boolean> {
-  const payload = JSON.stringify(normalizeConfig(config))
+/** 按 Scripting 原生同步方式保存配置，不读取返回值判定成功或失败。 */
+export function saveConfig(config: AwsAppConfig): void {
   try {
-    const storage = Storage as any
-    if (typeof storage === "undefined" || typeof storage.set !== "function") return false
-    // Aliyun's Scripting Storage.set is synchronous; await also handles
-    // builds that return a Promise without changing the sync behavior.
-    await storage.set(STORAGE_KEY, payload)
-    return true
+    if (typeof Storage !== "undefined" && Storage?.set) {
+      Storage.set(STORAGE_KEY, JSON.stringify(normalizeConfig(config)))
+    }
   } catch (error) {
     console.error("保存 AWS 配置失败:", error)
-    return false
   }
 }
 
