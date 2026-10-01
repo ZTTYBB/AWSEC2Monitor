@@ -8,8 +8,6 @@ import {
   Navigation,
   Script,
   NavigationStack,
-  List,
-  Section,
   ScrollView,
   VStack,
   HStack,
@@ -125,31 +123,11 @@ function saveCachedData(data: AwsMonitorData): void {
   } catch {}
 }
 
-function SettingsActionButton({
-  label,
-  action,
-  accessibilityLabel
-}: {
-  label: string
-  action: () => void
-  accessibilityLabel: string
-}) {
-  return (
-    <Button action={action} buttonStyle="glass" accessibilityLabel={accessibilityLabel}>
-      <HStack spacing={4} alignment="center">
-        <Text font="caption1" bold foregroundStyle="tintColor">{label}</Text>
-        <Image systemName="chevron.right" font={10} foregroundStyle="secondaryLabel" />
-      </HStack>
-    </Button>
-  )
-}
-
 function SettingsRow({
   icon,
   iconColor,
   title,
   detail,
-  actionLabel,
   action,
   accessibilityLabel
 }: {
@@ -157,19 +135,62 @@ function SettingsRow({
   iconColor: string
   title: string
   detail: string
-  actionLabel: string
   action: () => void
   accessibilityLabel: string
 }) {
   return (
-    <HStack alignment="center" spacing={12} padding={{ vertical: 4 }}>
-      <Image systemName={icon} font={17} foregroundStyle={iconColor} frame={{ width: 28, height: 28 }} />
-      <VStack alignment="leading" spacing={2} frame={{ maxWidth: Infinity, alignment: "leading" }}>
-        <Text font="subheadline" foregroundStyle="label" lineLimit={1}>{title}</Text>
-        <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>{detail}</Text>
+    <Button action={action} accessibilityLabel={accessibilityLabel}>
+      <HStack
+        alignment="center"
+        spacing={12}
+        padding={{ horizontal: 14, vertical: 12 }}
+        frame={{ maxWidth: Infinity, alignment: "leading" }}
+      >
+        <ZStack
+          frame={{ width: 34, height: 34 }}
+          background="tertiarySystemFill"
+          clipShape={{ type: "rect", cornerRadius: 10, style: "continuous" }}
+        >
+          <Image systemName={icon} font={15} foregroundStyle={iconColor} />
+        </ZStack>
+        <VStack alignment="leading" spacing={3} frame={{ maxWidth: Infinity, alignment: "leading" }}>
+          <Text font="subheadline" foregroundStyle="label" lineLimit={1}>{title}</Text>
+          <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={2}>{detail}</Text>
+        </VStack>
+        <Image systemName="chevron.right" font={11} foregroundStyle="tertiaryLabel" />
+      </HStack>
+    </Button>
+  )
+}
+
+function SettingsGroup({
+  title,
+  footer,
+  children
+}: {
+  title: string
+  footer: string
+  children?: any
+}) {
+  return (
+    <VStack alignment="leading" spacing={8} frame={{ maxWidth: Infinity, alignment: "leading" }}>
+      <Text font="caption1" bold foregroundStyle="secondaryLabel" padding={{ horizontal: 4 }}>
+        {title}
+      </Text>
+      <VStack
+        alignment="leading"
+        spacing={0}
+        frame={{ maxWidth: Infinity, alignment: "leading" }}
+        glassEffect={true}
+        clipShape={{ type: "rect", cornerRadius: 16, style: "continuous" }}
+        shadow={{ color: "rgba(0, 0, 0, 0.08)", radius: 12, y: 4 }}
+      >
+        {children}
       </VStack>
-      <SettingsActionButton label={actionLabel} action={action} accessibilityLabel={accessibilityLabel} />
-    </HStack>
+      <Text font="caption2" foregroundStyle="tertiaryLabel" padding={{ horizontal: 4 }}>
+        {footer}
+      </Text>
+    </VStack>
   )
 }
 
@@ -267,107 +288,130 @@ function SettingsView({
   }
 
   return (
-    <List
+    <ScrollView
       background="systemGroupedBackground"
-      navigationTitle="AWS 参数配置"
-      navigationBarTitleDisplayMode="inline"
+      showsIndicators={false}
+      navigationTitle="设置"
+      navigationBarTitleDisplayMode="large"
       toolbar={{
-        topBarLeading: [<Button key="aws-settings-back" action={onCancel} disabled={saving} accessibilityLabel="返回主页"><Image systemName="chevron.backward" /></Button>],
+        topBarLeading: [
+          <Button key="aws-settings-back" action={onCancel} disabled={saving} accessibilityLabel="返回主页">
+            <Image systemName="chevron.backward" foregroundStyle="label" />
+          </Button>
+        ],
         topBarTrailing: [<Button key="aws-settings-save" action={handleSave} disabled={saving} accessibilityLabel="保存配置"><Image systemName="checkmark" /></Button>]
       }}
     >
-      {errorNotice && (
-        <Section>
-          <HStack alignment="top" spacing={8} padding={{ vertical: 4 }}>
+      <VStack
+        alignment="leading"
+        spacing={22}
+        padding={{ horizontal: 16, top: 10, bottom: 40 }}
+        frame={{ maxWidth: Infinity, alignment: "leading" }}
+      >
+        <VStack alignment="leading" spacing={4}>
+          <Text font="title2" bold foregroundStyle="label">AWS EC2 监控</Text>
+          <Text font="subheadline" foregroundStyle="secondaryLabel">
+            凭据只保存在本机，用于读取 CloudWatch 和 EC2 状态。
+          </Text>
+        </VStack>
+
+        {errorNotice && (
+          <HStack
+            alignment="top"
+            spacing={9}
+            padding={{ horizontal: 14, vertical: 12 }}
+            background="rgba(255, 59, 48, 0.10)"
+            clipShape={{ type: "rect", cornerRadius: 14, style: "continuous" }}
+          >
             <Image systemName="exclamationmark.triangle.fill" font={13} foregroundStyle="systemRed" />
-            <Text font="caption1" foregroundStyle="systemRed" lineLimit={3}>{errorNotice}</Text>
+            <Text font="caption1" foregroundStyle="systemRed" lineLimit={4} frame={{ maxWidth: Infinity, alignment: "leading" }}>
+              {errorNotice}
+            </Text>
           </HStack>
-        </Section>
-      )}
-      <Section
-        header={<Text>AWS 查询凭据</Text>}
-        footer={<Text font="footnote" foregroundStyle="secondaryLabel">凭据保存在 Scripting 本机 Storage。本脚本仅查询 AWS 状态和流量，不会修改任何 AWS 资源。</Text>}
-      >
-        <SettingsRow
-          icon="key"
-          iconColor="systemOrange"
-          title="Access Key ID"
-          detail={maskAccessKeyId(accessKeyId)}
-          actionLabel={accessKeyId ? "修改" : "设置"}
-          accessibilityLabel="设置 AWS Access Key ID"
-          action={() => promptField("Access Key ID", "请输入 AWS Access Key ID", accessKeyId, "AKIA...", setAccessKeyId)}
-        />
-        <SettingsRow
-          icon="lock"
-          iconColor="systemRed"
-          title="Secret Access Key"
-          detail={secretAccessKey ? "已设置" : "未设置"}
-          actionLabel={secretAccessKey ? "修改" : "设置"}
-          accessibilityLabel="设置 AWS Secret Access Key"
-          action={() => promptField("Secret Access Key", "请输入 AWS Secret Access Key", "", "不会在界面显示", setSecretAccessKey)}
-        />
-        <SettingsRow
-          icon="ticket"
-          iconColor="systemPurple"
-          title="Session Token（可选）"
-          detail={sessionToken ? "已设置" : "长期 IAM 密钥可留空"}
-          actionLabel={sessionToken ? "修改" : "设置"}
-          accessibilityLabel="设置 AWS Session Token"
-          action={() => promptField("Session Token", "使用临时凭据时填写；长期 IAM 密钥可留空", "", "可选", setSessionToken)}
-        />
-      </Section>
-      <Section
-        header={<Text>监控目标</Text>}
-        footer={<Text font="footnote" foregroundStyle="secondaryLabel">Region 必须与 EC2 实例一致。Instance ID 可以先留空，补齐后主页才会开始查询。</Text>}
-      >
-        <SettingsRow
-          icon="server.rack"
-          iconColor="systemGreen"
-          title="EC2 实例 ID"
-          detail={instanceId || "未设置"}
-          actionLabel={instanceId ? "修改" : "设置"}
-          accessibilityLabel="设置 EC2 实例 ID"
-          action={() => promptField("EC2 实例 ID", "请输入要监控的实例 ID", instanceId, "i-0123456789abcdef0", setInstanceId)}
-        />
-        <SettingsRow
-          icon="globe"
-          iconColor="systemBlue"
-          title="AWS Region"
-          detail={region}
-          actionLabel="选择"
-          accessibilityLabel="设置 AWS Region"
-          action={selectRegion}
-        />
-      </Section>
-      <Section
-        header={<Text>月度流量阈值</Text>}
-        footer={<Text font="footnote" foregroundStyle="secondaryLabel">默认 100 GB，按十进制 GB（1 GB = 1,000,000,000 bytes）计算；只用于本地提醒。</Text>}
-      >
-        <SettingsRow
-          icon="speedometer"
-          iconColor="systemTeal"
-          title="NetworkOut 阈值"
-          detail={`${threshold || "100"} GB / UTC 月`}
-          actionLabel="修改"
-          accessibilityLabel="设置 NetworkOut 月度阈值"
-          action={() => promptField("NetworkOut 月度阈值（GB）", "仅作本地提醒参考，不代表 AWS 账单免费额度", threshold, "100", setThreshold)}
-        />
-      </Section>
-      <Section>
-        <Button action={handleSave} buttonStyle="glass" controlSize="large" disabled={saving} accessibilityLabel="保存配置并返回">
+        )}
+
+        <SettingsGroup
+          title="AWS 查询凭据"
+          footer="长期 IAM 密钥可留空 Session Token；临时凭据必须填写完整 Token。"
+        >
+          <SettingsRow
+            icon="key.fill"
+            iconColor="systemOrange"
+            title="Access Key ID"
+            detail={maskAccessKeyId(accessKeyId)}
+            accessibilityLabel="设置 AWS Access Key ID"
+            action={() => promptField("Access Key ID", "请输入 AWS Access Key ID", accessKeyId, "AKIA...", setAccessKeyId)}
+          />
+          <Divider padding={{ horizontal: 14 }} />
+          <SettingsRow
+            icon="lock.fill"
+            iconColor="systemRed"
+            title="Secret Access Key"
+            detail={secretAccessKey ? "已保存 · 不在界面显示" : "尚未设置"}
+            accessibilityLabel="设置 AWS Secret Access Key"
+            action={() => promptField("Secret Access Key", "请输入 AWS Secret Access Key", "", "不会在界面显示", setSecretAccessKey)}
+          />
+          <Divider padding={{ horizontal: 14 }} />
+          <SettingsRow
+            icon="ticket.fill"
+            iconColor="systemPurple"
+            title="Session Token"
+            detail={sessionToken ? "已保存 · 临时凭据" : "可选 · 长期密钥留空"}
+            accessibilityLabel="设置 AWS Session Token"
+            action={() => promptField("Session Token", "使用临时凭据时填写；长期 IAM 密钥可留空", "", "可选", setSessionToken)}
+          />
+        </SettingsGroup>
+
+        <SettingsGroup
+          title="监控目标"
+          footer="Region 必须与 EC2 实例一致；Instance ID 补齐后才会开始查询。"
+        >
+          <SettingsRow
+            icon="server.rack"
+            iconColor="systemGreen"
+            title="EC2 实例 ID"
+            detail={instanceId || "尚未设置"}
+            accessibilityLabel="设置 EC2 实例 ID"
+            action={() => promptField("EC2 实例 ID", "请输入要监控的实例 ID", instanceId, "i-0123456789abcdef0", setInstanceId)}
+          />
+          <Divider padding={{ horizontal: 14 }} />
+          <SettingsRow
+            icon="globe"
+            iconColor="systemBlue"
+            title="AWS Region"
+            detail={region}
+            accessibilityLabel="设置 AWS Region"
+            action={selectRegion}
+          />
+        </SettingsGroup>
+
+        <SettingsGroup
+          title="流量提醒"
+          footer="按十进制 GB 计算，仅用于本地看板提醒，不代表 AWS 账单免费额度。"
+        >
+          <SettingsRow
+            icon="speedometer"
+            iconColor="systemTeal"
+            title="NetworkOut 月度阈值"
+            detail={`${threshold || "100"} GB / UTC 自然月`}
+            accessibilityLabel="设置 NetworkOut 月度阈值"
+            action={() => promptField("NetworkOut 月度阈值（GB）", "仅作本地提醒参考，不代表 AWS 账单免费额度", threshold, "100", setThreshold)}
+          />
+        </SettingsGroup>
+
+        <Button action={handleSave} buttonStyle="borderedProminent" controlSize="large" disabled={saving} accessibilityLabel="保存配置并返回">
           <HStack spacing={8} alignment="center">
-            <Image systemName={saving ? "arrow.clockwise" : "checkmark.circle.fill"} foregroundStyle="tintColor" />
-            <Text font="headline" foregroundStyle="tintColor">{saving ? "正在保存" : "保存并返回主页"}</Text>
+            <Image systemName={saving ? "arrow.clockwise" : "checkmark.circle.fill"} />
+            <Text font="headline">{saving ? "正在保存" : "保存并返回主页"}</Text>
           </HStack>
         </Button>
-      </Section>
-      <Section>
-        <VStack alignment="center" spacing={3} padding={{ vertical: 14 }}>
-          <Text font={12} foregroundStyle="secondaryLabel">AWS EC2 Traffic Monitor v{APP_VERSION}</Text>
-          <Text font={11} foregroundStyle="tertiaryLabel">CloudWatch NetworkOut · 仅查询，不修改资源</Text>
+
+        <VStack alignment="center" spacing={3} padding={{ top: 4, bottom: 8 }}>
+          <Text font="caption2" foregroundStyle="secondaryLabel">AWS EC2 Traffic Monitor · v{APP_VERSION}</Text>
+          <Text font="caption2" foregroundStyle="tertiaryLabel">CloudWatch NetworkOut · 只读查询</Text>
         </VStack>
-      </Section>
-    </List>
+      </VStack>
+    </ScrollView>
   )
 }
 
@@ -423,6 +467,61 @@ function TrafficRing({ data, threshold }: { data: AwsMonitorData | null; thresho
   )
 }
 
+function StatusBadge({
+  data,
+  loading
+}: {
+  data: AwsMonitorData | null
+  loading?: boolean
+}) {
+  const meta = trafficMeta(data)
+  return (
+    <HStack
+      spacing={5}
+      padding={{ horizontal: 10, vertical: 6 }}
+      background="tertiarySystemFill"
+      clipShape="capsule"
+      alignment="center"
+    >
+      <Image systemName={loading ? "arrow.clockwise" : meta.icon} font={12} foregroundStyle={loading ? "systemBlue" : meta.color} />
+      <Text font="caption2" bold foregroundStyle={loading ? "systemBlue" : meta.color}>
+        {loading ? "同步中" : meta.label}
+      </Text>
+    </HStack>
+  )
+}
+
+function DashboardStat({
+  icon,
+  iconColor,
+  title,
+  value,
+  detail
+}: {
+  icon: string
+  iconColor: string
+  title: string
+  value: string
+  detail: string
+}) {
+  return (
+    <VStack
+      alignment="leading"
+      spacing={5}
+      frame={{ maxWidth: Infinity, alignment: "leading" }}
+    >
+      <HStack spacing={6} alignment="center">
+        <Image systemName={icon} font={12} foregroundStyle={iconColor} />
+        <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>{title}</Text>
+      </HStack>
+      <Text font="headline" bold monospacedDigit foregroundStyle="label" lineLimit={1} minScaleFactor={0.7}>
+        {value}
+      </Text>
+      <Text font="caption2" foregroundStyle="tertiaryLabel" lineLimit={1}>{detail}</Text>
+    </VStack>
+  )
+}
+
 function TrafficOverview({
   data,
   threshold,
@@ -442,51 +541,41 @@ function TrafficOverview({
 
   return (
     <VStack
-      spacing={14}
-      padding={{ horizontal: 16, vertical: 18 }}
+      alignment="leading"
+      spacing={18}
+      padding={18}
       frame={{ maxWidth: Infinity, alignment: "leading" }}
-      background="systemBackground"
-      border={{ style: "separator", width: 0.5 }}
-      clipShape={{ type: "rect", cornerRadius: 18, style: "continuous" }}
+      glassEffect={true}
+      clipShape={{ type: "rect", cornerRadius: 24, style: "continuous" }}
+      shadow={{ color: "rgba(0, 0, 0, 0.10)", radius: 16, y: 6 }}
     >
       <HStack alignment="center">
-        <VStack alignment="leading" spacing={3}>
-          <Text font="headline" bold foregroundStyle="label">本月流量余量</Text>
-          <Text font="caption2" foregroundStyle="secondaryLabel">
-            AWS EC2 NetworkOut · UTC {data?.monthKey || "本月"}
-          </Text>
-        </VStack>
-        <Spacer />
-        <HStack
-          spacing={5}
-          padding={{ horizontal: 9, vertical: 5 }}
-          background="tertiarySystemFill"
-          clipShape={{ type: "capsule" }}
-          alignment="center"
-        >
-          <Image systemName={meta.icon} font={12} foregroundStyle={meta.color} />
-          <Text font="caption2" bold foregroundStyle={meta.color}>{loading ? "同步中" : meta.label}</Text>
+        <HStack spacing={10} alignment="center">
+          <ZStack
+            frame={{ width: 38, height: 38 }}
+            background="rgba(255, 149, 0, 0.16)"
+            clipShape={{ type: "rect", cornerRadius: 12, style: "continuous" }}
+          >
+            <Image systemName="cloud.fill" font={18} foregroundStyle="systemOrange" />
+          </ZStack>
+          <VStack alignment="leading" spacing={3}>
+            <Text font="headline" bold foregroundStyle="label">NetworkOut</Text>
+            <Text font="caption2" foregroundStyle="secondaryLabel">
+              AWS EC2 · UTC {data?.monthKey || "本月"}
+            </Text>
+          </VStack>
         </HStack>
+        <Spacer />
+        <StatusBadge data={data} loading={loading} />
       </HStack>
 
-      <HStack alignment="center" spacing={12}>
+      <VStack alignment="center" spacing={11} frame={{ maxWidth: Infinity, alignment: "center" }}>
         <TrafficRing data={data} threshold={threshold} />
-        <VStack alignment="leading" spacing={12} frame={{ maxWidth: Infinity, alignment: "leading" }}>
-          <VStack alignment="leading" spacing={3}>
-            <Text font="caption1" foregroundStyle="secondaryLabel">当前月用量</Text>
-            <HStack alignment="lastTextBaseline" spacing={3}>
-              <Text font={22} bold monospacedDigit foregroundStyle={exceeded ? "systemRed" : "label"}>
-                {data ? data.totalGB.toFixed(2) : "--"}
-              </Text>
-              <Text font="caption1" foregroundStyle="secondaryLabel">/ {threshold} GB</Text>
-            </HStack>
-          </VStack>
-          <VStack alignment="leading" spacing={3}>
-            <Text font="caption1" foregroundStyle="secondaryLabel">{exceeded ? "状态" : "余量提示"}</Text>
-            <Text font="subheadline" bold foregroundStyle={meta.color} lineLimit={2}>{difference}</Text>
-          </VStack>
+        <VStack alignment="center" spacing={3}>
+          <Text font="caption1" foregroundStyle="secondaryLabel">{exceeded ? "月度阈值" : "余量提示"}</Text>
+          <Text font="subheadline" bold foregroundStyle={meta.color} lineLimit={2}>{difference}</Text>
         </VStack>
-      </HStack>
+      </VStack>
 
       <ProgressView
         progressViewStyle="linear"
@@ -495,14 +584,21 @@ function TrafficOverview({
         tint={meta.color}
         frame={{ maxWidth: Infinity, height: 7 }}
       />
-      <HStack alignment="center">
-        <Text font="caption2" foregroundStyle="secondaryLabel">
-          已使用 {data ? data.percentage.toFixed(1) : "0.0"}%
-        </Text>
-        <Spacer />
-        <Text font="caption2" foregroundStyle="tertiaryLabel">
-          {data ? `${data.datapointCount} 个 5 分钟数据点` : "尚未取得数据"}
-        </Text>
+      <HStack spacing={14} alignment="top" frame={{ maxWidth: Infinity, alignment: "leading" }}>
+        <DashboardStat
+          icon="chart.bar.fill"
+          iconColor="systemBlue"
+          title="当前用量"
+          value={data ? `${data.totalGB.toFixed(2)} GB` : "--"}
+          detail={`阈值 ${threshold} GB`}
+        />
+        <DashboardStat
+          icon="gauge.with.dots.needle.67percent"
+          iconColor={exceeded ? "systemRed" : "systemGreen"}
+          title="已使用"
+          value={data ? `${data.percentage.toFixed(1)}%` : "--"}
+          detail={data ? `${data.datapointCount} 个数据点` : "尚未取得数据"}
+        />
       </HStack>
     </VStack>
   )
@@ -523,23 +619,23 @@ function SetupPromptView({
   return (
     <VStack
       alignment="center"
-      spacing={16}
-      padding={{ horizontal: 24, vertical: 42 }}
+      spacing={18}
+      padding={{ horizontal: 22, vertical: 30 }}
       frame={{ maxWidth: Infinity, alignment: "center" }}
-      background="systemBackground"
-      border={{ style: "separator", width: 0.5 }}
-      clipShape={{ type: "rect", cornerRadius: 18, style: "continuous" }}
+      glassEffect={true}
+      clipShape={{ type: "rect", cornerRadius: 24, style: "continuous" }}
+      shadow={{ color: "rgba(0, 0, 0, 0.10)", radius: 16, y: 6 }}
     >
       <ZStack
-        frame={{ width: 58, height: 58 }}
-        background="tertiarySystemFill"
-        clipShape={{ type: "rect", cornerRadius: 16, style: "continuous" }}
+        frame={{ width: 66, height: 66 }}
+        background="rgba(255, 149, 0, 0.16)"
+        clipShape={{ type: "rect", cornerRadius: 20, style: "continuous" }}
       >
-        <Image systemName="gearshape.2.fill" font={25} foregroundStyle="systemOrange" />
+        <Image systemName="cloud.fill" font={30} foregroundStyle="systemOrange" />
       </ZStack>
       <VStack alignment="center" spacing={6}>
         <Text font="title3" bold foregroundStyle="label">
-          {credentialsSaved ? "还需要设置监控目标" : "尚未配置 AWS 查询凭据"}
+          {credentialsSaved ? "还需要设置监控目标" : "连接 AWS 监控"}
         </Text>
         <Text
           font="subheadline"
@@ -549,13 +645,24 @@ function SetupPromptView({
         >
           {credentialsSaved
             ? `凭据已保存。请在设置中补充 EC2 实例 ID，主页才会查询 ${config.region} 的 NetworkOut。`
-            : "先保存 Access Key、Secret Access Key 和 Region。EC2 实例 ID 可以之后再设置。"}
+            : "在设置中添加查询凭据和 Region，随后再选择需要监控的 EC2 实例。"}
         </Text>
       </VStack>
+      <HStack
+        spacing={7}
+        padding={{ horizontal: 12, vertical: 8 }}
+        background="tertiarySystemFill"
+        clipShape="capsule"
+      >
+        <Image systemName={credentialsSaved ? "checkmark.circle.fill" : "lock.shield.fill"} font={12} foregroundStyle={credentialsSaved ? "systemGreen" : "systemBlue"} />
+        <Text font="caption2" foregroundStyle="secondaryLabel">
+          {credentialsSaved ? `凭据已保存 · ${config.region}` : "只读查询 · 凭据保存在本机"}
+        </Text>
+      </HStack>
       <Button action={onOpenSettings} buttonStyle="borderedProminent" controlSize="large" accessibilityLabel="进入 AWS 设置">
         <HStack spacing={7} alignment="center">
           <Image systemName="gearshape" />
-          <Text font="headline">进入设置</Text>
+          <Text font="headline">打开设置</Text>
         </HStack>
       </Button>
     </VStack>
@@ -624,6 +731,8 @@ function ConsoleView() {
         showsIndicators={false}
         navigationTitle="AWS EC2 监控"
         navigationBarTitleDisplayMode="large"
+        toolbarBackground="clear"
+        toolbarBackgroundVisibility={{ visibility: "hidden", bars: ["navigationBar"] }}
         toolbar={{
           topBarTrailing: [
             <Button
@@ -640,7 +749,15 @@ function ConsoleView() {
           ]
         }}
       >
-        <VStack alignment="leading" spacing={12} padding={{ horizontal: 16, top: 8, bottom: 36 }}>
+        <VStack alignment="leading" spacing={18} padding={{ horizontal: 16, top: 8, bottom: 40 }}>
+          <HStack alignment="center" padding={{ horizontal: 4 }}>
+            <VStack alignment="leading" spacing={3} frame={{ maxWidth: Infinity, alignment: "leading" }}>
+              <Text font="subheadline" foregroundStyle="secondaryLabel">本月出站流量看板</Text>
+              <Text font="caption2" foregroundStyle="tertiaryLabel">CloudWatch · Sum · 300 秒 · UTC 自然月</Text>
+            </VStack>
+            {isConfigReady(config) && <StatusBadge data={data} loading={loading} />}
+          </HStack>
+
           {!hasCredentials(config) || !hasRegion(config) || !hasMonitorTarget(config) ? (
             <SetupPromptView config={config} onOpenSettings={() => setShowSettings(true)} />
           ) : (
@@ -650,8 +767,8 @@ function ConsoleView() {
                   alignment="top"
                   spacing={8}
                   padding={{ horizontal: 14, vertical: 12 }}
-                  background="secondarySystemBackground"
-                  border={{ style: "separator", width: 0.5 }}
+                  background="rgba(255, 59, 48, 0.10)"
+                  glassEffect={true}
                   clipShape={{ type: "rect", cornerRadius: 14, style: "continuous" }}
                 >
                   <Image systemName="exclamationmark.triangle.fill" font={13} foregroundStyle="systemRed" />
@@ -663,18 +780,21 @@ function ConsoleView() {
 
               <HStack alignment="center" padding={{ horizontal: 4 }}>
                 <Image systemName="clock" font={12} foregroundStyle="secondaryLabel" />
-                <Text font="caption2" foregroundStyle="secondaryLabel">最后更新：{formatUpdatedAt(data?.updatedAt)}</Text>
+                <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
+                  最后更新：{formatUpdatedAt(data?.updatedAt)}
+                </Text>
                 <Spacer />
                 <Text font="caption2" foregroundStyle="secondaryLabel">阈值 {threshold} GB</Text>
               </HStack>
 
               <VStack
+                alignment="leading"
                 spacing={0}
-                background="systemBackground"
-                border={{ style: "separator", width: 0.5 }}
-                clipShape={{ type: "rect", cornerRadius: 16, style: "continuous" }}
+                glassEffect={true}
+                clipShape={{ type: "rect", cornerRadius: 18, style: "continuous" }}
+                shadow={{ color: "rgba(0, 0, 0, 0.08)", radius: 12, y: 4 }}
               >
-                <HStack padding={{ horizontal: 16, vertical: 14 }} alignment="center" spacing={12}>
+                <HStack padding={{ horizontal: 15, vertical: 14 }} alignment="center" spacing={12}>
                   <ZStack
                     frame={{ width: 36, height: 36 }}
                     background="tertiarySystemFill"
@@ -683,30 +803,33 @@ function ConsoleView() {
                     <Image systemName="server.rack" font={16} foregroundStyle={meta.color} />
                   </ZStack>
                   <VStack alignment="leading" spacing={3} frame={{ maxWidth: Infinity, alignment: "leading" }}>
-                    <Text font="subheadline" bold foregroundStyle="label">EC2 实例状态</Text>
+                    <Text font="subheadline" bold foregroundStyle="label">EC2 实例</Text>
                     <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
                       {data?.instance?.instanceId || config.instanceId} · {config.region}
                     </Text>
                   </VStack>
-                  <VStack alignment="trailing" spacing={2}>
-                    <Text font="subheadline" bold foregroundStyle={meta.color}>{meta.label}</Text>
-                    <Text font="caption2" foregroundStyle="secondaryLabel">仅查询，不修改资源</Text>
-                  </VStack>
+                  <StatusBadge data={data} />
                 </HStack>
                 <Divider padding={{ horizontal: 16 }} />
-                <HStack padding={{ horizontal: 16, vertical: 13 }} alignment="center" spacing={12}>
-                  <Image systemName="waveform.path.ecg" font={16} foregroundStyle="systemTeal" frame={{ width: 36, height: 28 }} />
+                <HStack padding={{ horizontal: 15, vertical: 13 }} alignment="center" spacing={12}>
+                  <ZStack
+                    frame={{ width: 36, height: 36 }}
+                    background="tertiarySystemFill"
+                    clipShape={{ type: "rect", cornerRadius: 10, style: "continuous" }}
+                  >
+                    <Image systemName="waveform.path.ecg" font={16} foregroundStyle="systemTeal" />
+                  </ZStack>
                   <VStack alignment="leading" spacing={3} frame={{ maxWidth: Infinity, alignment: "leading" }}>
                     <Text font="subheadline" foregroundStyle="label">统计口径</Text>
                     <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={2}>
                       CloudWatch · Sum · 300 秒 · UTC 自然月
                     </Text>
                   </VStack>
-                  <Text font="caption2" foregroundStyle="secondaryLabel">NetworkOut</Text>
+                  <Text font="caption2" bold foregroundStyle="systemTeal">NetworkOut</Text>
                 </HStack>
               </VStack>
 
-              <Text font="caption2" foregroundStyle="tertiaryLabel" padding={{ horizontal: 4, top: 2 }}>
+              <Text font="caption2" foregroundStyle="tertiaryLabel" padding={{ horizontal: 4 }}>
                 这里显示的是当前 EC2 实例的 NetworkOut，不等于 AWS 账号所有服务的账单出站总量；CloudWatch 数据可能有延迟。
               </Text>
             </>

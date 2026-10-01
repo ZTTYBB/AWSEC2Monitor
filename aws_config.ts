@@ -9,7 +9,7 @@
 // module namespace only as a compatibility fallback for older runtimes.
 import * as ScriptingModule from "scripting"
 
-export const APP_VERSION = "1.0.7"
+export const APP_VERSION = "1.0.9"
 
 export interface AwsAppConfig {
   accessKeyId: string

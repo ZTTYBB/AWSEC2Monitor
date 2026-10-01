@@ -6,7 +6,7 @@ import {
   utf8Bytes
 } from "./aws_crypto"
 
-const BYTES_PER_GB = 1_000_000_000
+const BYTES_PER_GB = 1024 * 1024 * 1024
 const CLOUDWATCH_PERIOD_SECONDS = 300
 
 export type AwsInstanceStatus = "running" | "stopped" | "pending" | "stopping" | "unknown"
@@ -226,13 +226,38 @@ function trafficStatus(totalGB: number, thresholdGB: number): "normal" | "warnin
 }
 
 function parseNetworkOutValues(xml: string): number[] {
-  const idPosition = xml.search(/<Id>\s*networkout\s*<\/Id>/i)
-  if (idPosition < 0) return []
-  const valuesStart = xml.indexOf("<Values", idPosition)
-  if (valuesStart < 0) return []
-  const valuesEnd = xml.indexOf("</Values>", valuesStart)
-  if (valuesEnd < 0) return []
-  return allXmlMemberText(xml.slice(valuesStart, valuesEnd))
+  const idPos = xml.search(/<Id>\s*networkout\s*<\/Id>/i)
+  if (idPos < 0) {
+    const match = xml.match(/<Values(?:\s[^>]*)?>([\s\S]*?)<\/Values>/i)
+    if (!match) return []
+    return allXmlMemberText(match[1])
+      .map(value => Number(value))
+      .filter(value => Number.isFinite(value) && value >= 0)
+  }
+
+  const beforeSlice = xml.slice(0, idPos)
+  const lastValuesStart = beforeSlice.lastIndexOf("<Values")
+  const lastValuesEnd = beforeSlice.lastIndexOf("</Values>")
+
+  const afterSlice = xml.slice(idPos)
+  const nextValuesStart = afterSlice.indexOf("<Values")
+  const nextValuesEnd = afterSlice.indexOf("</Values>")
+
+  let valuesContent = ""
+
+  const distBefore = (lastValuesEnd !== -1 && lastValuesStart !== -1) ? (idPos - lastValuesEnd) : Infinity
+  const distAfter = (nextValuesStart !== -1 && nextValuesEnd !== -1) ? nextValuesStart : Infinity
+
+  if (distBefore < distAfter && distBefore < 100000) {
+    valuesContent = beforeSlice.slice(lastValuesStart, lastValuesEnd)
+  } else if (distAfter !== Infinity) {
+    valuesContent = afterSlice.slice(nextValuesStart, nextValuesEnd)
+  } else {
+    const match = xml.match(/<Values(?:\s[^>]*)?>([\s\S]*?)<\/Values>/i)
+    if (match) valuesContent = match[1]
+  }
+
+  return allXmlMemberText(valuesContent)
     .map(value => Number(value))
     .filter(value => Number.isFinite(value) && value >= 0)
 }

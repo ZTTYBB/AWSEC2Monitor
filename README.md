@@ -15,13 +15,13 @@
 
 👉 **[⚡ 点击一键导入到 Scripting (国内 CDN 加速)](https://scripting.fun/import_scripts?urls=%5B%22https%3A%2F%2Ffastly.jsdelivr.net%2Fgh%2FZTTYBB%2FAWSEC2Monitor%40main%2FAWSEC2.scripting%22%5D)**
 
-> 当前发布包为 `1.0.7`。`AWSEC2.scripting` 包内使用 Scripting 约定的 `index.tsx` 与 `widget.tsx` 入口文件；不要在安装包内改成 `aws_index.tsx` 或 `aws_widget.tsx`。
+> 当前发布包为 `1.0.9`。`AWSEC2.scripting` 包内使用 Scripting 约定的 `index.tsx` 与 `widget.tsx` 入口文件；不要在安装包内改成 `aws_index.tsx` 或 `aws_widget.tsx`。
 
 ---
 
 ## 📊 监控口径
 
-脚本读取 CloudWatch `AWS/EC2` 的 `NetworkOut`，以 `Sum`、`Bytes`、300 秒周期累计当前 UTC 自然月，默认阈值为 `100 GB`。1 GB 按十进制 `1,000,000,000` bytes 计算，阈值可在设置中修改。
+脚本读取 CloudWatch `AWS/EC2` 的 `NetworkOut`，以 `Sum`、`Bytes`、300 秒周期累计当前 UTC 自然月，默认阈值为 `100 GB`。1 GB 按二进制 `1,073,741,824` bytes (GiB) 计算，与 AWS 官方账单和扣费口径严格对齐，阈值可在设置中修改。
 
 这能监控“这台 EC2 的 CloudWatch 网络出口是否接近 100 GB”。AWS 官网说明的 100 GB Internet data transfer out 免费额度是跨 AWS 服务和区域聚合的账号级规则（中国区和 GovCloud 除外）。
 
