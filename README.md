@@ -1,25 +1,45 @@
-# AWS EC2 流量监控小组件
+# AWS EC2 流量监控与状态看板 (Scripting iOS)
 
-这是一个独立的 iOS Scripting 任务，与阿里云 CDT 监控脚本分开。导入 `AWSEC2.scripting` 后，在 Scripting App 内完成配置即可使用主屏幕和锁屏小组件。
+[![Platform](https://img.shields.io/badge/platform-iOS%2016%2B-lightgrey.svg)](https://apps.apple.com/app/scripting/id1575361494)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## 监控口径
+专为 iOS **Scripting** 打造的 AWS EC2 免费月度出站流量 (NetworkOut) 监控与实例状态看板，采用 TypeScript + TSX 构建，支持 iOS 16+ 桌面全尺寸小组件。
+
+---
+
+## 🚀 一键安装 (快速导入)
+
+在已安装 **Scripting** 的 iPhone / iPad 上，点击下方链接即可自动唤起 Scripting 确认安装：
+
+👉 **[📥 点击一键导入到 Scripting (GitHub 原链)](https://scripting.fun/import_scripts?urls=%5B%22https%3A%2F%2Fraw.githubusercontent.com%2FZTTYBB%2FAWSEC2Monitor%2Fmain%2FAWSEC2.scripting%22%5D)**
+
+👉 **[⚡ 点击一键导入到 Scripting (国内 CDN 加速)](https://scripting.fun/import_scripts?urls=%5B%22https%3A%2F%2Ffastly.jsdelivr.net%2Fgh%2FZTTYBB%2FAWSEC2Monitor%40main%2FAWSEC2.scripting%22%5D)**
+
+---
+
+## 📊 监控口径
 
 脚本读取 CloudWatch `AWS/EC2` 的 `NetworkOut`，以 `Sum`、`Bytes`、300 秒周期累计当前 UTC 自然月，默认阈值为 `100 GB`。1 GB 按十进制 `1,000,000,000` bytes 计算，阈值可在设置中修改。
 
-这能监控“这台 EC2 的 CloudWatch 网络出口是否接近 100 GB”，但不等于 AWS 账单的精确出站流量或账户免费额度余额。跨区域传输、NAT Gateway、CloudFront、IPv4 和其他 AWS 服务可能产生不由该实例 `NetworkOut` 完整表达的计费项。AWS 官网当前说明的 100 GB Internet data transfer out 免费额度是跨 AWS 服务和区域聚合的账号级规则（中国区和 GovCloud 除外），不能简单按单台 EC2 余额判断。
+这能监控“这台 EC2 的 CloudWatch 网络出口是否接近 100 GB”。AWS 官网说明的 100 GB Internet data transfer out 免费额度是跨 AWS 服务和区域聚合的账号级规则（中国区和 GovCloud 除外）。
 
-## 配置
+---
 
-1. AWS Access Key ID。
-2. AWS Secret Access Key。
-3. 临时凭据的 Session Token；长期密钥可留空。
-4. EC2 所在 Region，例如 `us-east-1`、`ap-southeast-1` 或 `cn-north-1`。
-5. EC2 实例 ID。
-6. 月度 NetworkOut 阈值，默认 `100 GB`。
+## ⚙️ 手机端配置
 
-凭据保存在 Scripting 本机 Storage，代码包不包含真实凭据。建议使用专用、只读、定期轮换的 IAM 凭据；Scripting Storage 不是专用密钥保管库。
+首次打开脚本或添加小组件时，填写以下配置：
+1. **AWS Access Key ID**
+2. **AWS Secret Access Key**
+3. **Session Token**（临时凭据填写；长期密钥留空）
+4. **Region**：例如 `ap-southeast-1`（新加坡）或 `us-east-1`
+5. **Instance ID**：EC2 实例 ID（例如 `i-0363cc4c1957d01ea`）
+6. **月度 NetworkOut 阈值**：默认 `100 GB`（或按需设为 `95 GB`）
 
-## 最小 IAM 权限
+凭据保存在 Scripting 本机 Storage，绝不上云。
+
+---
+
+## 🔒 最小 IAM 权限
 
 ```json
 {
@@ -38,9 +58,4 @@
 }
 ```
 
-脚本只读取 CloudWatch 和 EC2，不会启动、停止、重启或修改实例，也不查询账单金额。
-
-## 官方依据
-
-- [EC2 CloudWatch instance metrics](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/viewing_metrics_with_cloudwatch.html)
-- [Amazon EC2 On-Demand pricing](https://aws.amazon.com/ec2/pricing/on-demand/)
+脚本只只读读取 CloudWatch 和 EC2 状态，不会修改任何 AWS 资源。
