@@ -27,7 +27,8 @@ export const DEFAULT_CONFIG: AwsAppConfig = {
   trafficThresholdGB: 100
 }
 
-export const STORAGE_KEY = "aws_ec2_monitor_config_v1"
+export const STORAGE_KEY = "aws_ec2_monitor_config"
+const LEGACY_STORAGE_KEYS = ["aws_ec2_monitor_config_v1"] as const
 export const SNAPSHOT_STORAGE_KEY = "aws_ec2_monitor_snapshot_v1"
 
 function normalizeConfig(value: unknown): AwsAppConfig {
@@ -48,23 +49,85 @@ function normalizeConfig(value: unknown): AwsAppConfig {
 }
 
 export function loadConfig(): AwsAppConfig {
+  return loadConfigSync()
+}
+
+function parseStoredConfig(value: unknown): AwsAppConfig | null {
+  if (!value) return null
   try {
-    const saved = Storage.get(STORAGE_KEY)
-    if (saved) {
-      const parsed = typeof saved === "string" ? JSON.parse(saved) : saved
-      return normalizeConfig(parsed)
-    }
+    const parsed = typeof value === "string" ? JSON.parse(value) : value
+    const config = normalizeConfig(parsed)
+    return isConfigReady(config) ? config : null
+  } catch {
+    return null
+  }
+}
+
+function readStorageValue(key: string): unknown {
+  try {
+    const storage = Storage as any
+    if (typeof storage === "undefined" || typeof storage.get !== "function") return null
+    return storage.get(key)
   } catch (error) {
-    console.error("读取 AWS 配置失败:", error)
+    console.error(`读取 AWS 配置失败 (${key}):`, error)
+    return null
+  }
+}
+
+function loadConfigSync(): AwsAppConfig {
+  const keys = [STORAGE_KEY, ...LEGACY_STORAGE_KEYS]
+  for (const key of keys) {
+    const config = parseStoredConfig(readStorageValue(key))
+    if (config) return config
   }
   return normalizeConfig(DEFAULT_CONFIG)
 }
 
-export function saveConfig(config: AwsAppConfig): void {
+/**
+ * Supports both current Scripting Storage implementations and builds where
+ * Storage methods return promises. Awaiting a plain value is harmless.
+ */
+export async function loadConfigAsync(): Promise<AwsAppConfig> {
+  const keys = [STORAGE_KEY, ...LEGACY_STORAGE_KEYS]
+  for (const key of keys) {
+    try {
+      const storage = Storage as any
+      if (typeof storage === "undefined" || typeof storage.get !== "function") continue
+      const config = parseStoredConfig(await storage.get(key))
+      if (config) return config
+    } catch (error) {
+      console.error(`异步读取 AWS 配置失败 (${key}):`, error)
+    }
+  }
+  return normalizeConfig(DEFAULT_CONFIG)
+}
+
+function sameConfig(left: AwsAppConfig, right: AwsAppConfig): boolean {
+  return (
+    left.accessKeyId === right.accessKeyId &&
+    left.secretAccessKey === right.secretAccessKey &&
+    left.sessionToken === right.sessionToken &&
+    left.region === right.region &&
+    left.instanceId === right.instanceId &&
+    left.trafficThresholdGB === right.trafficThresholdGB
+  )
+}
+
+export async function saveConfig(config: AwsAppConfig): Promise<boolean> {
+  const normalized = normalizeConfig(config)
+  const payload = JSON.stringify(normalized)
   try {
-    Storage.set(STORAGE_KEY, JSON.stringify(config))
+    const storage = Storage as any
+    if (typeof storage === "undefined" || typeof storage.set !== "function") return false
+    await storage.set(STORAGE_KEY, payload)
+
+    // Keep the old key readable during package upgrades and verify the write.
+    await storage.set(LEGACY_STORAGE_KEYS[0], payload)
+    const saved = parseStoredConfig(await storage.get(STORAGE_KEY))
+    return Boolean(saved && sameConfig(saved, normalized))
   } catch (error) {
     console.error("保存 AWS 配置失败:", error)
+    return false
   }
 }
 

@@ -12,7 +12,7 @@ import {
   DEFAULT_CONFIG,
   SNAPSHOT_STORAGE_KEY,
   isConfigReady,
-  loadConfig
+  loadConfigAsync
 } from "./aws_config"
 import { AwsMonitorData, AwsService } from "./aws"
 
@@ -233,7 +233,7 @@ function captionFont(): number {
 
 async function main() {
   try {
-    const config = loadConfig()
+    const config = await loadConfigAsync()
     if (!isConfigReady(config)) {
       present(<NotConfiguredView />)
       return

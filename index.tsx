@@ -13,8 +13,10 @@ import {
   ScrollView,
   VStack,
   HStack,
+  ZStack,
   Text,
   Image,
+  Circle,
   ProgressView,
   Button,
   Spacer,
@@ -29,7 +31,7 @@ import {
   DEFAULT_CONFIG,
   SNAPSHOT_STORAGE_KEY,
   isConfigReady,
-  loadConfig,
+  loadConfigAsync,
   saveConfig
 } from "./aws_config"
 import { AwsMonitorData, AwsService } from "./aws"
@@ -161,6 +163,7 @@ function SettingsView({
   const [instanceId, setInstanceId] = useState(currentConfig.instanceId)
   const [threshold, setThreshold] = useState(String(currentConfig.trafficThresholdGB || 100))
   const [errorNotice, setErrorNotice] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   const promptField = async (
     title: string,
@@ -205,6 +208,7 @@ function SettingsView({
   }
 
   const handleSave = () => {
+    if (saving) return
     const value = Number(threshold)
     if (!accessKeyId.trim() || !secretAccessKey.trim() || !region.trim() || !instanceId.trim()) {
       setErrorNotice("请填写 Access Key ID、Secret Access Key、Region 和 EC2 实例 ID。")
@@ -222,8 +226,17 @@ function SettingsView({
       instanceId: instanceId.trim(),
       trafficThresholdGB: value
     }
-    saveConfig(nextConfig)
-    onSave(nextConfig)
+    setSaving(true)
+    void (async () => {
+      const saved = await saveConfig(nextConfig)
+      if (!saved) {
+        setSaving(false)
+        setErrorNotice("配置写入本机 Storage 失败，请检查 Scripting 权限后重试；本次不会退出设置页。")
+        return
+      }
+      setSaving(false)
+      onSave(nextConfig)
+    })()
   }
 
   return (
@@ -233,9 +246,9 @@ function SettingsView({
       navigationBarTitleDisplayMode="inline"
       toolbar={{
         topBarLeading: isConfigReady(currentConfig)
-          ? [<Button key="aws-settings-back" action={onCancel} accessibilityLabel="返回"><Image systemName="chevron.backward" /></Button>]
+          ? [<Button key="aws-settings-back" action={onCancel} disabled={saving} accessibilityLabel="返回"><Image systemName="chevron.backward" /></Button>]
           : undefined,
-        topBarTrailing: [<Button key="aws-settings-save" action={handleSave} accessibilityLabel="保存配置"><Image systemName="checkmark" /></Button>]
+        topBarTrailing: [<Button key="aws-settings-save" action={handleSave} disabled={saving} accessibilityLabel="保存配置"><Image systemName="checkmark" /></Button>]
       }}
     >
       {errorNotice && (
@@ -316,10 +329,10 @@ function SettingsView({
         />
       </Section>
       <Section>
-        <Button action={handleSave} buttonStyle="glass" controlSize="large" accessibilityLabel="保存配置并返回">
+        <Button action={handleSave} buttonStyle="glass" controlSize="large" disabled={saving} accessibilityLabel="保存配置并返回">
           <HStack spacing={8} alignment="center">
-            <Image systemName="checkmark.circle.fill" foregroundStyle="tintColor" />
-            <Text font="headline" foregroundStyle="tintColor">保存并返回</Text>
+            <Image systemName={saving ? "arrow.clockwise" : "checkmark.circle.fill"} foregroundStyle="tintColor" />
+            <Text font="headline" foregroundStyle="tintColor">{saving ? "正在保存" : "保存并返回主页"}</Text>
           </HStack>
         </Button>
       </Section>
@@ -333,60 +346,154 @@ function SettingsView({
   )
 }
 
-function MetricSummary({ data, threshold }: { data: AwsMonitorData | null; threshold: number }) {
-  if (!data) {
-    return (
-      <HStack padding={16} alignment="center">
-        <Text font="caption1" foregroundStyle="secondaryLabel">点击右上角刷新读取 CloudWatch 数据。</Text>
-      </HStack>
-    )
+function trafficMeta(data: AwsMonitorData | null): { label: string; color: string; icon: string } {
+  if (!data) return { label: "等待同步", color: "secondaryLabel", icon: "clock" }
+  if (data.statusLevel === "danger") {
+    return { label: "已达到参考上限", color: "systemRed", icon: "exclamationmark.octagon.fill" }
   }
-  const exceeded = data.totalGB >= threshold
-  const remaining = Math.max(0, threshold - data.totalGB)
+  if (data.statusLevel === "warning") {
+    return { label: "接近参考上限", color: "systemOrange", icon: "exclamationmark.triangle.fill" }
+  }
+  return { label: "本月余量充足", color: "systemGreen", icon: "checkmark.seal.fill" }
+}
+
+function TrafficRing({ data, threshold }: { data: AwsMonitorData | null; threshold: number }) {
+  const progress = data ? Math.min(1, Math.max(0, data.totalGB / threshold)) : 0
+  const meta = trafficMeta(data)
+  const ringSize = 174
+
   return (
-    <VStack spacing={12} padding={16}>
-      <HStack alignment="bottom">
-        <VStack alignment="leading" spacing={2}>
-          <Text font="caption1" foregroundStyle="secondaryLabel">UTC {data.monthKey} NetworkOut</Text>
-          <Text font={34} bold monospacedDigit foregroundStyle={exceeded ? "systemRed" : "label"}>
-            {data.totalGB.toFixed(3)} GB
+    <ZStack frame={{ width: ringSize, height: ringSize }} alignment="center">
+      <Circle
+        stroke={{
+          shapeStyle: "rgba(142, 142, 147, 0.18)",
+          strokeStyle: { lineWidth: 12, lineCap: "round" }
+        }}
+        frame={{ width: ringSize, height: ringSize }}
+      />
+      {progress > 0.001 && (
+        <Circle
+          trim={{ from: 0, to: progress }}
+          stroke={{
+            shapeStyle: meta.color,
+            strokeStyle: { lineWidth: 12, lineCap: "round" }
+          }}
+          rotationEffect={-90}
+          frame={{ width: ringSize, height: ringSize }}
+        />
+      )}
+      <VStack alignment="center" spacing={2}>
+        <Text font="caption1" foregroundStyle="secondaryLabel">本月剩余</Text>
+        <HStack alignment="lastTextBaseline" spacing={3}>
+          <Text font={34} bold monospacedDigit lineLimit={1} minScaleFactor={0.65} foregroundStyle="label">
+            {data ? data.remainingGB.toFixed(2) : "--"}
+          </Text>
+          <Text font="subheadline" foregroundStyle="secondaryLabel">GB</Text>
+        </HStack>
+        <Text font="caption2" foregroundStyle={meta.color}>
+          {data ? `已用 ${data.percentage.toFixed(1)}%` : "等待首次同步"}
+        </Text>
+      </VStack>
+    </ZStack>
+  )
+}
+
+function TrafficOverview({
+  data,
+  threshold,
+  loading
+}: {
+  data: AwsMonitorData | null
+  threshold: number
+  loading: boolean
+}) {
+  const meta = trafficMeta(data)
+  const exceeded = data ? data.totalGB >= threshold : false
+  const difference = data
+    ? exceeded
+      ? `超出 ${Math.max(0, data.totalGB - threshold).toFixed(2)} GB`
+      : `还可使用 ${data.remainingGB.toFixed(2)} GB`
+    : "点击右上角刷新读取 CloudWatch"
+
+  return (
+    <VStack
+      spacing={14}
+      padding={{ horizontal: 16, vertical: 18 }}
+      frame={{ maxWidth: Infinity, alignment: "leading" }}
+      background="systemBackground"
+      border={{ style: "separator", width: 0.5 }}
+      clipShape={{ type: "rect", cornerRadius: 18, style: "continuous" }}
+    >
+      <HStack alignment="center">
+        <VStack alignment="leading" spacing={3}>
+          <Text font="headline" bold foregroundStyle="label">本月流量余量</Text>
+          <Text font="caption2" foregroundStyle="secondaryLabel">
+            AWS EC2 NetworkOut · UTC {data?.monthKey || "本月"}
           </Text>
         </VStack>
         <Spacer />
-        <VStack alignment="trailing" spacing={2}>
-          <Text font="caption2" foregroundStyle="secondaryLabel">{exceeded ? "超出阈值" : "剩余阈值"}</Text>
-          <Text font={18} bold monospacedDigit foregroundStyle={exceeded ? "systemRed" : "systemBlue"}>
-            {exceeded ? `+${(data.totalGB - threshold).toFixed(3)}` : remaining.toFixed(3)} GB
-          </Text>
+        <HStack
+          spacing={5}
+          padding={{ horizontal: 9, vertical: 5 }}
+          background="tertiarySystemFill"
+          clipShape={{ type: "capsule" }}
+          alignment="center"
+        >
+          <Image systemName={meta.icon} font={12} foregroundStyle={meta.color} />
+          <Text font="caption2" bold foregroundStyle={meta.color}>{loading ? "同步中" : meta.label}</Text>
+        </HStack>
+      </HStack>
+
+      <HStack alignment="center" spacing={12}>
+        <TrafficRing data={data} threshold={threshold} />
+        <VStack alignment="leading" spacing={12} frame={{ maxWidth: Infinity, alignment: "leading" }}>
+          <VStack alignment="leading" spacing={3}>
+            <Text font="caption1" foregroundStyle="secondaryLabel">当前月用量</Text>
+            <HStack alignment="lastTextBaseline" spacing={3}>
+              <Text font={22} bold monospacedDigit foregroundStyle={exceeded ? "systemRed" : "label"}>
+                {data ? data.totalGB.toFixed(2) : "--"}
+              </Text>
+              <Text font="caption1" foregroundStyle="secondaryLabel">/ {threshold} GB</Text>
+            </HStack>
+          </VStack>
+          <VStack alignment="leading" spacing={3}>
+            <Text font="caption1" foregroundStyle="secondaryLabel">{exceeded ? "状态" : "余量提示"}</Text>
+            <Text font="subheadline" bold foregroundStyle={meta.color} lineLimit={2}>{difference}</Text>
+          </VStack>
         </VStack>
       </HStack>
+
       <ProgressView
         progressViewStyle="linear"
-        value={Math.min(1, Math.max(0, data.totalGB / threshold))}
+        value={progressValue(data, threshold)}
         total={1}
-        tint={exceeded ? "systemRed" : data.percentage >= 80 ? "systemOrange" : "systemGreen"}
-        frame={{ maxWidth: Infinity, height: 6 }}
+        tint={meta.color}
+        frame={{ maxWidth: Infinity, height: 7 }}
       />
       <HStack alignment="center">
-        <Text font="caption1" foregroundStyle="secondaryLabel">{Math.min(100, data.percentage).toFixed(1)}% / {threshold} GB</Text>
+        <Text font="caption2" foregroundStyle="secondaryLabel">
+          已使用 {data ? data.percentage.toFixed(1) : "0.0"}%
+        </Text>
         <Spacer />
-        <Text font="caption2" foregroundStyle="tertiaryLabel">{data.datapointCount} 个 5 分钟数据点</Text>
+        <Text font="caption2" foregroundStyle="tertiaryLabel">
+          {data ? `${data.datapointCount} 个 5 分钟数据点` : "尚未取得数据"}
+        </Text>
       </HStack>
     </VStack>
   )
 }
 
+function progressValue(data: AwsMonitorData | null, threshold: number): number {
+  return data ? Math.min(1, Math.max(0, data.totalGB / threshold)) : 0
+}
+
 function ConsoleView() {
-  const [config, setConfig] = useState<AwsAppConfig>(loadConfig())
-  const [showSettings, setShowSettings] = useState(!isConfigReady(config))
+  const [config, setConfig] = useState<AwsAppConfig>(DEFAULT_CONFIG)
+  const [configLoaded, setConfigLoaded] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [data, setData] = useState<AwsMonitorData | null>(loadCachedData())
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [logs, setLogs] = useState<string[]>([])
-
-  const appendLog = (message: string) => {
-    setLogs(previous => [`[${new Date().toLocaleTimeString()}] ${message}`, ...previous.slice(0, 5)])
-  }
 
   const loadData = useCallback(async (nextConfig: AwsAppConfig = config) => {
     if (!isConfigReady(nextConfig)) {
@@ -396,24 +503,45 @@ function ConsoleView() {
     setLoading(true)
     setErrorMessage(null)
     try {
-      appendLog("正在读取 AWS CloudWatch 和 EC2...")
       const result = await new AwsService(nextConfig).getMonitorData()
       setData(result)
       saveCachedData(result)
-      appendLog(`UTC ${result.monthKey} NetworkOut: ${result.totalGB} GB`)
-      appendLog(`EC2: ${statusMeta(result.instance.status).label}`)
     } catch (error: any) {
       const message = error?.message || "AWS 请求失败，请检查 Region、实例 ID 和只读权限"
       setErrorMessage(message)
-      appendLog(`错误: ${message}`)
     } finally {
       setLoading(false)
     }
   }, [config])
 
   useEffect(() => {
-    if (isConfigReady(config)) loadData(config)
+    let cancelled = false
+    void (async () => {
+      const savedConfig = await loadConfigAsync()
+      if (cancelled) return
+      setConfig(savedConfig)
+      setConfigLoaded(true)
+      setShowSettings(!isConfigReady(savedConfig))
+      if (isConfigReady(savedConfig)) {
+        loadData(savedConfig)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [])
+
+  if (!configLoaded) {
+    return (
+      <NavigationStack>
+        <VStack alignment="center" spacing={8} padding={24}>
+          <Image systemName="lock.shield" font={24} foregroundStyle="systemOrange" />
+          <Text font="headline" foregroundStyle="label">正在读取本机配置</Text>
+          <Text font="caption1" foregroundStyle="secondaryLabel">不会上传访问密钥。</Text>
+        </VStack>
+      </NavigationStack>
+    )
+  }
 
   if (showSettings) {
     return (
@@ -458,27 +586,20 @@ function ConsoleView() {
       >
         <VStack alignment="leading" spacing={12} padding={{ horizontal: 16, top: 8, bottom: 36 }}>
           {errorMessage && (
-            <HStack alignment="top" spacing={8} padding={{ horizontal: 12, vertical: 10 }} background="rgba(255, 59, 48, 0.10)">
+            <HStack
+              alignment="top"
+              spacing={8}
+              padding={{ horizontal: 14, vertical: 12 }}
+              background="secondarySystemBackground"
+              border={{ style: "separator", width: 0.5 }}
+              clipShape={{ type: "rect", cornerRadius: 14, style: "continuous" }}
+            >
               <Image systemName="exclamationmark.triangle.fill" font={13} foregroundStyle="systemRed" />
-              <Text font="caption1" foregroundStyle="systemRed" lineLimit={4}>{errorMessage}</Text>
+              <Text font="caption1" foregroundStyle="systemRed" lineLimit={4} frame={{ maxWidth: Infinity, alignment: "leading" }}>{errorMessage}</Text>
             </HStack>
           )}
 
-          <HStack alignment="center">
-            <VStack alignment="leading" spacing={3}>
-              <Text font="headline" foregroundStyle="label">EC2 NetworkOut</Text>
-              <Text font="caption2" foregroundStyle="secondaryLabel">{config.instanceId} · {config.region}</Text>
-            </VStack>
-            <Spacer />
-            <HStack spacing={5} alignment="center">
-              <Image systemName={meta.icon} font={13} foregroundStyle={meta.color} />
-              <Text font="caption1" bold foregroundStyle={meta.color}>{loading ? "同步中" : meta.label}</Text>
-            </HStack>
-          </HStack>
-
-          <VStack spacing={0} background="systemBackground" border={{ style: "separator", width: 0.5 }}>
-            <MetricSummary data={data} threshold={threshold} />
-          </VStack>
+          <TrafficOverview data={data} threshold={threshold} loading={loading} />
 
           <HStack alignment="center" padding={{ horizontal: 4 }}>
             <Image systemName="clock" font={12} foregroundStyle="secondaryLabel" />
@@ -487,36 +608,46 @@ function ConsoleView() {
             <Text font="caption2" foregroundStyle="secondaryLabel">阈值 {threshold} GB</Text>
           </HStack>
 
-          <VStack spacing={0} background="systemBackground" border={{ style: "separator", width: 0.5 }}>
-            <HStack padding={{ horizontal: 16, vertical: 12 }} alignment="center">
-              <Image systemName="server.rack" font={16} foregroundStyle="systemBlue" frame={{ width: 24, height: 24 }} />
-              <VStack alignment="leading" spacing={2}>
-                <Text font="subheadline" foregroundStyle="label">EC2 实例状态</Text>
-                <Text font="caption2" foregroundStyle="secondaryLabel">{data?.instance?.instanceId || config.instanceId}</Text>
+          <VStack
+            spacing={0}
+            background="systemBackground"
+            border={{ style: "separator", width: 0.5 }}
+            clipShape={{ type: "rect", cornerRadius: 16, style: "continuous" }}
+          >
+            <HStack padding={{ horizontal: 16, vertical: 14 }} alignment="center" spacing={12}>
+              <ZStack
+                frame={{ width: 36, height: 36 }}
+                background="tertiarySystemFill"
+                clipShape={{ type: "rect", cornerRadius: 10, style: "continuous" }}
+              >
+                <Image systemName="server.rack" font={16} foregroundStyle={meta.color} />
+              </ZStack>
+              <VStack alignment="leading" spacing={3} frame={{ maxWidth: Infinity, alignment: "leading" }}>
+                <Text font="subheadline" bold foregroundStyle="label">EC2 实例状态</Text>
+                <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={1}>
+                  {data?.instance?.instanceId || config.instanceId} · {config.region}
+                </Text>
               </VStack>
-              <Spacer />
-              <Text font="subheadline" bold foregroundStyle={meta.color}>{meta.label}</Text>
+              <VStack alignment="trailing" spacing={2}>
+                <Text font="subheadline" bold foregroundStyle={meta.color}>{meta.label}</Text>
+                <Text font="caption2" foregroundStyle="secondaryLabel">只读查询</Text>
+              </VStack>
             </HStack>
-            <Divider padding={{ leading: 52 }} />
-            <HStack padding={{ horizontal: 16, vertical: 12 }} alignment="center">
-              <Image systemName="waveform.path.ecg" font={16} foregroundStyle="systemTeal" frame={{ width: 24, height: 24 }} />
-              <VStack alignment="leading" spacing={2}>
+            <Divider padding={{ horizontal: 16 }} />
+            <HStack padding={{ horizontal: 16, vertical: 13 }} alignment="center" spacing={12}>
+              <Image systemName="waveform.path.ecg" font={16} foregroundStyle="systemTeal" frame={{ width: 36, height: 28 }} />
+              <VStack alignment="leading" spacing={3} frame={{ maxWidth: Infinity, alignment: "leading" }}>
                 <Text font="subheadline" foregroundStyle="label">统计口径</Text>
-                <Text font="caption2" foregroundStyle="secondaryLabel">CloudWatch · Sum · 300 秒 · UTC 当月</Text>
+                <Text font="caption2" foregroundStyle="secondaryLabel" lineLimit={2}>
+                  CloudWatch · Sum · 300 秒 · UTC 自然月
+                </Text>
               </VStack>
-              <Spacer />
-              <Text font="caption1" bold foregroundStyle="secondaryLabel">只读</Text>
+              <Text font="caption2" foregroundStyle="secondaryLabel">NetworkOut</Text>
             </HStack>
           </VStack>
 
-          <VStack alignment="leading" spacing={6} padding={{ horizontal: 4, top: 4 }}>
-            <Text font="subheadline" bold foregroundStyle="label">最近活动</Text>
-            {logs.length > 0
-              ? logs.map((item, index) => <Text key={index} font="caption2" foregroundStyle="secondaryLabel" lineLimit={2}>{item}</Text>)
-              : <Text font="caption2" foregroundStyle="secondaryLabel">暂无记录，点击刷新同步。</Text>}
-          </VStack>
-          <Text font="caption2" foregroundStyle="tertiaryLabel">
-            NetworkOut 是实例指标，不等于账单中的所有网络出站计费项。当前月按 UTC 自然月累计，数据可能有 CloudWatch 延迟。
+          <Text font="caption2" foregroundStyle="tertiaryLabel" padding={{ horizontal: 4, top: 2 }}>
+            这里显示的是当前 EC2 实例的 NetworkOut，不等于 AWS 账号所有服务的账单出站总量；CloudWatch 数据可能有延迟。
           </Text>
         </VStack>
       </ScrollView>

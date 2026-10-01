@@ -37,7 +37,7 @@
 5. **Instance ID**：EC2 实例 ID（例如 `i-0363cc4c1957d01ea`）
 6. **月度 NetworkOut 阈值**：默认 `100 GB`（或按需设为 `95 GB`）
 
-凭据保存在 Scripting 本机 Storage，绝不上云。
+凭据保存在 Scripting 本机 Storage，绝不上云。脚本启动时会先读取已保存配置；保存后会回读校验，只有写入成功才返回监控页。旧版本的 `aws_ec2_monitor_config_v1` 配置也会自动兼容读取。
 
 ---
 
