@@ -5,9 +5,11 @@
  * directly on the device. Use a dedicated read-only IAM principal and rotate
  * it regularly; Storage is not an application-level secret vault.
  */
-import { Storage } from "scripting"
+// The Scripting entry point exposes Storage as a runtime global. Keep the
+// module namespace only as a compatibility fallback for older runtimes.
+import * as ScriptingModule from "scripting"
 
-export const APP_VERSION = "1.0.6"
+export const APP_VERSION = "1.0.7"
 
 export interface AwsAppConfig {
   accessKeyId: string
@@ -92,25 +94,97 @@ function parseStoredConfig(value: unknown): AwsAppConfig | null {
   }
 }
 
-function readStorageValue(key: string): unknown {
+type StorageLike = {
+  get?: (key: string) => unknown
+  set?: (key: string, value: string) => unknown
+}
+
+function getGlobalStorage(): StorageLike | null {
   try {
-    const storage = Storage as any
-    if (typeof storage === "undefined" || typeof storage.get !== "function") return null
-    return storage.get(key)
-  } catch (error) {
-    console.error(`读取 AWS 配置失败 (${key}):`, error)
+    // This is the same access pattern used by Aliyun's actual index.tsx.
+    if (typeof Storage !== "undefined" && Storage) {
+      return Storage as unknown as StorageLike
+    }
+  } catch {}
+
+  try {
+    const globalObject = typeof globalThis !== "undefined" ? globalThis as any : null
+    return globalObject?.Storage || null
+  } catch {
     return null
   }
 }
 
-/** 按 Scripting 原生同步方式保存配置，不读取 Storage.set 返回值。 */
+function getStorageCandidates(): StorageLike[] {
+  const candidates: StorageLike[] = []
+  const add = (candidate: unknown) => {
+    if ((typeof candidate !== "object" && typeof candidate !== "function") || !candidate) return
+    if (!candidates.includes(candidate as StorageLike)) {
+      candidates.push(candidate as StorageLike)
+    }
+  }
+
+  add(getGlobalStorage())
+  try {
+    // Namespace access is safe even when this runtime does not export Storage.
+    add((ScriptingModule as any)?.Storage)
+  } catch {}
+  return candidates
+}
+
+function readStorageValue(key: string): unknown {
+  let lastError: unknown = null
+  for (const storage of getStorageCandidates()) {
+    const getter = storage.get
+    if (typeof getter !== "function") continue
+    try {
+      return getter.call(storage, key)
+    } catch (error) {
+      lastError = error
+    }
+  }
+  if (lastError) {
+    console.error(`读取 AWS 配置失败 (${key}):`, lastError)
+  }
+  return null
+}
+
+/**
+ * Use the global Storage first, matching Aliyun's entry point. The method is
+ * invoked directly so a real runtime error is preserved instead of being
+ * mistaken for an unsupported API by a preflight type check.
+ */
+function writeStorageValue(key: string, value: string): void {
+  let lastError: unknown = null
+  let foundSetter = false
+
+  for (const storage of getStorageCandidates()) {
+    const setter = storage.set
+    if (typeof setter !== "function") continue
+    foundSetter = true
+    try {
+      setter.call(storage, key, value)
+      return
+    } catch (error) {
+      // Do not hide a real error from the active global Storage behind a
+      // different module namespace.
+      lastError = error
+      break
+    }
+  }
+
+  if (lastError) {
+    throw lastError instanceof Error ? lastError : new Error(String(lastError))
+  }
+  if (!foundSetter) {
+    throw new Error("Scripting Storage 未提供可用的 set 方法")
+  }
+}
+
 export function saveConfig(config: AwsAppConfig): AwsAppConfig {
   const normalized = normalizeConfig(config)
   try {
-    if (typeof Storage === "undefined" || typeof Storage.set !== "function") {
-      throw new Error("Scripting Storage.set 不可用")
-    }
-    Storage.set(STORAGE_KEY, JSON.stringify(normalized))
+    writeStorageValue(STORAGE_KEY, JSON.stringify(normalized))
     return normalized
   } catch (error) {
     console.error("保存 AWS 配置失败:", error)
