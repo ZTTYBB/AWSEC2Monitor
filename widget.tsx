@@ -13,7 +13,9 @@ import {
   DEFAULT_CONFIG,
   SNAPSHOT_STORAGE_KEY,
   isConfigReady,
-  loadConfig
+  loadConfig,
+  readStorageValue,
+  writeStorageValue
 } from "./aws_config"
 import { AwsMonitorData, AwsService } from "./aws"
 
@@ -58,8 +60,7 @@ function usageColor(data: AwsMonitorData): any {
 
 function readCachedData(): AwsMonitorData | null {
   try {
-    if (typeof Storage === "undefined" || !Storage.get) return null
-    const raw = Storage.get(SNAPSHOT_STORAGE_KEY)
+    const raw = readStorageValue(SNAPSHOT_STORAGE_KEY)
     if (!raw) return null
     const parsed = typeof raw === "string" ? JSON.parse(raw) : raw
     const updatedAt = new Date(parsed.updatedAt)
@@ -72,9 +73,7 @@ function readCachedData(): AwsMonitorData | null {
 
 function saveData(data: AwsMonitorData): void {
   try {
-    if (typeof Storage !== "undefined" && Storage.set) {
-      Storage.set(SNAPSHOT_STORAGE_KEY, JSON.stringify(data))
-    }
+    writeStorageValue(SNAPSHOT_STORAGE_KEY, JSON.stringify(data))
   } catch {}
 }
 

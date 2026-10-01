@@ -9,7 +9,7 @@
 // module namespace only as a compatibility fallback for older runtimes.
 import * as ScriptingModule from "scripting"
 
-export const APP_VERSION = "1.0.9"
+export const APP_VERSION = "1.1.0"
 
 export interface AwsAppConfig {
   accessKeyId: string
@@ -132,7 +132,7 @@ function getStorageCandidates(): StorageLike[] {
   return candidates
 }
 
-function readStorageValue(key: string): unknown {
+export function readStorageValue(key: string): unknown {
   let lastError: unknown = null
   for (const storage of getStorageCandidates()) {
     const getter = storage.get
@@ -154,7 +154,7 @@ function readStorageValue(key: string): unknown {
  * invoked directly so a real runtime error is preserved instead of being
  * mistaken for an unsupported API by a preflight type check.
  */
-function writeStorageValue(key: string, value: string): void {
+export function writeStorageValue(key: string, value: string): void {
   let lastError: unknown = null
   let foundSetter = false
 

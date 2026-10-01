@@ -15,7 +15,7 @@
 
 👉 **[⚡ 点击一键导入到 Scripting (国内 CDN 加速)](https://scripting.fun/import_scripts?urls=%5B%22https%3A%2F%2Ffastly.jsdelivr.net%2Fgh%2FZTTYBB%2FAWSEC2Monitor%40main%2FAWSEC2.scripting%22%5D)**
 
-> 当前发布包为 `1.0.9`。`AWSEC2.scripting` 包内使用 Scripting 约定的 `index.tsx` 与 `widget.tsx` 入口文件；不要在安装包内改成 `aws_index.tsx` 或 `aws_widget.tsx`。
+> 当前发布包为 `1.1.0`。`AWSEC2.scripting` 包内使用 Scripting 约定的 `index.tsx` 与 `widget.tsx` 入口文件；不要在安装包内改成 `aws_index.tsx` 或 `aws_widget.tsx`。
 
 ---
 
