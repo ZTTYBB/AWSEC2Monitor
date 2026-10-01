@@ -7,7 +7,7 @@
  */
 import { Storage } from "scripting"
 
-export const APP_VERSION = "1.0.0"
+export const APP_VERSION = "1.0.1"
 
 export interface AwsAppConfig {
   accessKeyId: string
@@ -27,7 +27,10 @@ export const DEFAULT_CONFIG: AwsAppConfig = {
   trafficThresholdGB: 100
 }
 
+// Keep the original key stable so upgrades do not create a new empty config
+// namespace in Scripting Storage.
 export const STORAGE_KEY = "aws_ec2_monitor_config_v1"
+const COMPAT_STORAGE_KEYS = ["aws_ec2_monitor_config"] as const
 export const SNAPSHOT_STORAGE_KEY = "aws_ec2_monitor_snapshot_v1"
 
 function normalizeConfig(value: unknown): AwsAppConfig {
@@ -48,23 +51,62 @@ function normalizeConfig(value: unknown): AwsAppConfig {
 }
 
 export function loadConfig(): AwsAppConfig {
-  try {
-    const saved = Storage.get(STORAGE_KEY)
-    if (saved) {
-      const parsed = typeof saved === "string" ? JSON.parse(saved) : saved
-      return normalizeConfig(parsed)
-    }
-  } catch (error) {
-    console.error("读取 AWS 配置失败:", error)
+  const keys = [STORAGE_KEY, ...COMPAT_STORAGE_KEYS]
+  for (const key of keys) {
+    const config = parseStoredConfig(readStorageValue(key))
+    if (config) return config
   }
   return normalizeConfig(DEFAULT_CONFIG)
 }
 
-export function saveConfig(config: AwsAppConfig): void {
+function parseStoredConfig(value: unknown): AwsAppConfig | null {
+  if (!value) return null
   try {
-    Storage.set(STORAGE_KEY, JSON.stringify(config))
+    const parsed = typeof value === "string" ? JSON.parse(value) : value
+    const config = normalizeConfig(parsed)
+    return isConfigReady(config) ? config : null
+  } catch {
+    return null
+  }
+}
+
+function readStorageValue(key: string): unknown {
+  try {
+    const storage = Storage as any
+    if (typeof storage === "undefined" || typeof storage.get !== "function") return null
+    return storage.get(key)
+  } catch (error) {
+    console.error(`读取 AWS 配置失败 (${key}):`, error)
+    return null
+  }
+}
+
+function sameConfig(left: AwsAppConfig, right: AwsAppConfig): boolean {
+  return (
+    left.accessKeyId === right.accessKeyId &&
+    left.secretAccessKey === right.secretAccessKey &&
+    left.sessionToken === right.sessionToken &&
+    left.region === right.region &&
+    left.instanceId === right.instanceId &&
+    left.trafficThresholdGB === right.trafficThresholdGB
+  )
+}
+
+export function saveConfig(config: AwsAppConfig): boolean {
+  const normalized = normalizeConfig(config)
+  const payload = JSON.stringify(normalized)
+  try {
+    const storage = Storage as any
+    if (typeof storage === "undefined" || typeof storage.set !== "function") return false
+    storage.set(STORAGE_KEY, payload)
+
+    // Also write the temporary key used by the previous AWS build.
+    storage.set(COMPAT_STORAGE_KEYS[0], payload)
+    const saved = parseStoredConfig(storage.get(STORAGE_KEY))
+    return Boolean(saved && sameConfig(saved, normalized))
   } catch (error) {
     console.error("保存 AWS 配置失败:", error)
+    return false
   }
 }
 

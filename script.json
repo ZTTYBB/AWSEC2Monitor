@@ -1,0 +1,16 @@
+{
+  "name": "AWSEC2Monitor",
+  "localizedNames": {
+    "zh": "AWS EC2 流量监控",
+    "en": "AWS EC2 Traffic Monitor"
+  },
+  "icon": "cloud.fill",
+  "color": "rgba(255, 149, 0, 1.00)",
+  "version": "1.0.1",
+  "runInApp": true,
+  "description": "Read-only AWS EC2 monthly NetworkOut monitor using CloudWatch. It does not start, stop, reboot, or change any AWS resource.",
+  "localizedDescriptions": {
+    "zh": "只读读取 AWS EC2 的 CloudWatch NetworkOut 月度用量；不启动、停止、重启或修改任何 AWS 资源。",
+    "en": "Read-only AWS EC2 monthly NetworkOut monitor using CloudWatch. It does not start, stop, reboot, or change any AWS resource."
+  }
+}

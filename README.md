@@ -15,6 +15,8 @@
 
 👉 **[⚡ 点击一键导入到 Scripting (国内 CDN 加速)](https://scripting.fun/import_scripts?urls=%5B%22https%3A%2F%2Ffastly.jsdelivr.net%2Fgh%2FZTTYBB%2FAWSEC2Monitor%40main%2FAWSEC2.scripting%22%5D)**
 
+> 当前发布包为 `1.0.1`。`AWSEC2.scripting` 包内使用 Scripting 约定的 `index.tsx` 与 `widget.tsx` 入口文件；不要在安装包内改成 `aws_index.tsx` 或 `aws_widget.tsx`。
+
 ---
 
 ## 📊 监控口径
@@ -35,7 +37,7 @@
 5. **Instance ID**：EC2 实例 ID（例如 `i-0363cc4c1957d01ea`）
 6. **月度 NetworkOut 阈值**：默认 `100 GB`（或按需设为 `95 GB`）
 
-凭据保存在 Scripting 本机 Storage，绝不上云。
+凭据保存在 Scripting 本机 Storage，绝不上云。脚本启动时会同步读取已保存配置；保存后会回读校验，只有写入成功才返回监控页。旧版本的 `aws_ec2_monitor_config_v1` 配置也会自动兼容读取。
 
 ---
 
