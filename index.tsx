@@ -36,6 +36,7 @@ import {
   saveConfig
 } from "./aws_config"
 import { AwsMonitorData, AwsService } from "./aws"
+import { getDailyBudget } from "./aws_budget"
 
 const AWS_REGIONS = [
   { id: "us-east-1", label: "美国东部（弗吉尼亚）" },
@@ -386,7 +387,7 @@ function SettingsView({
 
         <SettingsGroup
           title="流量提醒"
-          footer="按十进制 GB 计算，仅用于本地看板提醒，不代表 AWS 账单免费额度。"
+          footer="沿用二进制流量单位（1 GB = 1,073,741,824 bytes），仅用于本地看板提醒，不代表 AWS 账单免费额度。"
         >
           <SettingsRow
             icon="speedometer"
@@ -524,6 +525,7 @@ function TrafficOverview({
   loading: boolean
 }) {
   const meta = trafficMeta(data)
+  const budget = getDailyBudget(data)
   const exceeded = data ? data.totalGB >= threshold : false
   const difference = data
     ? exceeded
@@ -591,6 +593,13 @@ function TrafficOverview({
           detail={data ? `${data.datapointCount} 个数据点` : "尚未取得数据"}
         />
       </HStack>
+      <DashboardStat
+        icon="calendar"
+        iconColor="systemTeal"
+        title="日均可用"
+        value={budget ? `${budget.dailyAvailableGB.toFixed(2)} GB` : "--"}
+        detail={budget ? `UTC 剩余 ${budget.remainingDays} 天（含今天）` : "待更新"}
+      />
     </VStack>
   )
 }

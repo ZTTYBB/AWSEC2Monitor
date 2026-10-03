@@ -18,6 +18,7 @@ import {
   writeStorageValue
 } from "./aws_config"
 import { AwsMonitorData, AwsService } from "./aws"
+import { getDailyBudget } from "./aws_budget"
 
 const WIDGET_REFRESH_AFTER_MS = 15 * 60 * 1000
 const isTransparentWidget = (Widget as any).isTransparentBackground === true
@@ -257,6 +258,7 @@ function NotConfiguredView() {
 
 function SmallView({ data }: { data: AwsMonitorData }) {
   const meta = statusMeta(data.instance?.status || "unknown")
+  const budget = getDailyBudget(data)
   return (
     <VStack
       alignment="leading"
@@ -275,7 +277,9 @@ function SmallView({ data }: { data: AwsMonitorData }) {
       </HStack>
       <UsageHero data={data} width={131} height={78} compact />
       <HStack alignment="center">
-        <Text font={8} foregroundStyle={C.textSecondary} lineLimit={1}>{meta.label}</Text>
+        <Text font={8} monospacedDigit foregroundStyle={C.textSecondary} lineLimit={1} minScaleFactor={0.7}>
+          {budget ? `日均 ${budget.dailyAvailableGB.toFixed(2)} GB` : "日均 --"}
+        </Text>
         <Spacer />
         <Text font={8} foregroundStyle={C.textTertiary} lineLimit={1}>{updateLabel(data.updatedAt)}</Text>
       </HStack>
@@ -284,6 +288,7 @@ function SmallView({ data }: { data: AwsMonitorData }) {
 }
 
 function MediumView({ data }: { data: AwsMonitorData }) {
+  const budget = getDailyBudget(data)
   return (
     <VStack
       alignment="leading"
@@ -305,12 +310,14 @@ function MediumView({ data }: { data: AwsMonitorData }) {
         <VStack alignment="leading" spacing={7}>
           <HStack spacing={6}>
             <MetricTile label="剩余流量" value={`${data.remainingGB.toFixed(1)}G`} width={70} color={usageColor(data)} />
-            <MetricTile label="数据点" value={String(data.datapointCount)} width={70} />
+            <MetricTile label="日均可用" value={budget ? `${budget.dailyAvailableGB.toFixed(2)} GB` : "--"} width={70} />
           </HStack>
           <ZStack alignment="leading" frame={{ width: 146, height: 38 }}>
             <RoundedRectangle cornerRadius={8} style="continuous" fill={C.neutralPanel} frame={{ width: 146, height: 38 }} />
             <VStack alignment="leading" spacing={1} padding={{ horizontal: 8, vertical: 6 }} frame={{ width: 146, height: 38 }}>
-              <Text font={8} foregroundStyle={C.textSecondary}>实例状态</Text>
+              <Text font={8} foregroundStyle={C.textSecondary} lineLimit={1} minScaleFactor={0.8}>
+                {budget ? `实例状态 · UTC 剩${budget.remainingDays}天` : "实例状态 · 待更新"}
+              </Text>
               <Text font={10} bold foregroundStyle={statusMeta(data.instance?.status || "unknown").color} lineLimit={1}>
                 {statusMeta(data.instance?.status || "unknown").label} · {updateLabel(data.updatedAt)}
               </Text>
@@ -324,6 +331,7 @@ function MediumView({ data }: { data: AwsMonitorData }) {
 
 function LargeView({ data }: { data: AwsMonitorData }) {
   const instance = data.instance?.instanceId || "未读取实例 ID"
+  const budget = getDailyBudget(data)
   return (
     <VStack
       alignment="leading"
@@ -335,7 +343,9 @@ function LargeView({ data }: { data: AwsMonitorData }) {
         <BrandMark size={30} />
         <VStack alignment="leading" spacing={1}>
           <Text font={16} bold lineLimit={1}>AWS EC2 流量看板</Text>
-          <Text font={9} foregroundStyle={C.textSecondary} lineLimit={1}>本月累计 · UTC {data.monthKey}</Text>
+          <Text font={9} foregroundStyle={C.textSecondary} lineLimit={1} minScaleFactor={0.7}>
+            本月累计 · UTC {data.monthKey} · 更新 {updateLabel(data.updatedAt)}
+          </Text>
         </VStack>
         <Spacer />
         <StatusPill status={data.instance?.status || "unknown"} />
@@ -343,7 +353,11 @@ function LargeView({ data }: { data: AwsMonitorData }) {
       <UsageHero data={data} width={299} height={105} />
       <HStack spacing={8}>
         <MetricTile label="剩余流量" value={`${data.remainingGB.toFixed(2)} GB`} width={145} color={usageColor(data)} />
-        <MetricTile label="更新时间" value={updateLabel(data.updatedAt)} width={145} />
+        <MetricTile
+          label={budget ? `日均可用 · UTC 剩${budget.remainingDays}天` : "日均可用 · 待更新"}
+          value={budget ? `${budget.dailyAvailableGB.toFixed(2)} GB` : "--"}
+          width={145}
+        />
       </HStack>
       <ZStack alignment="leading" frame={{ width: 299, height: 40 }}>
         <RoundedRectangle cornerRadius={8} style="continuous" fill={C.neutralPanel} frame={{ width: 299, height: 40 }} />
